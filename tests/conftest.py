@@ -3,7 +3,11 @@ from collections.abc import Iterator
 import pytest
 from sqlalchemy import Engine
 
-from invoice_manager.persistence.database import create_database, initialise_database, session_factory
+from invoice_manager.persistence.database import (
+    create_database,
+    initialise_database,
+    session_factory,
+)
 
 
 @pytest.fixture

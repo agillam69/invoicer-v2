@@ -6,7 +6,7 @@ ROUND_HALF_UP, at the cent boundary; binary floats are rejected.
 
 from __future__ import annotations
 
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from numbers import Real
 
 CENT = Decimal("0.01")
@@ -26,6 +26,8 @@ def _decimal(value: Decimal | str | int) -> Decimal:
 
 
 def dollars_to_cents(value: Decimal | str | int) -> int:
+    if isinstance(value, str):
+        value = value.replace(",", "")
     amount = _decimal(value).quantize(CENT, rounding=ROUND_HALF_UP)
     cents = int(amount * 100)
     if cents < 0:

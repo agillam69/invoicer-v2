@@ -28,8 +28,9 @@ class NumberingService:
             .with_for_update()
         )
         if sequence is None:
-            sequence = NumberSequence(sequence_type=sequence_type, prefix=prefix,
-                                      next_value=1, padding=padding)
+            sequence = NumberSequence(
+                sequence_type=sequence_type, prefix=prefix, next_value=1, padding=padding
+            )
             session.add(sequence)
             session.flush()
         value = sequence.next_value

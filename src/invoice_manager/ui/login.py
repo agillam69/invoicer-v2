@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QDialog, QFormLayout, QLineEdit, QPushButton, QVBoxLayout
 
@@ -7,7 +9,7 @@ from PySide6.QtWidgets import QDialog, QFormLayout, QLineEdit, QPushButton, QVBo
 class LoginDialog(QDialog):
     authenticated = Signal(object)
 
-    def __init__(self, service: object, session: object) -> None:
+    def __init__(self, service: Any, session: Any) -> None:
         super().__init__()
         self.service = service
         self.session = session
@@ -27,7 +29,9 @@ class LoginDialog(QDialog):
 
     def _submit(self) -> None:
         try:
-            user = self.service.authenticate(self.session, self.username.text(), self.password.text())
+            user = self.service.authenticate(
+                self.session, self.username.text(), self.password.text()
+            )
         except ValueError:
             self.password.clear()
             self.setWindowTitle("Invoicer V2 — Sign in (invalid credentials)")

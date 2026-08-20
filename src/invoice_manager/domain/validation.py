@@ -9,10 +9,22 @@ from datetime import date, datetime
 from pathlib import Path
 
 _FORMATS = (
-    "%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%d-%m-%y",
-    "%Y-%m-%d", "%Y/%m/%d", "%d %b %Y", "%d %B %Y",
-    "%b %d %Y", "%B %d %Y", "%d%b%Y", "%d%b%y",
-    "%d/%b/%Y", "%d-%b-%Y", "%d.%m.%Y", "%d.%m.%y",
+    "%d/%m/%Y",
+    "%d-%m-%Y",
+    "%d/%m/%y",
+    "%d-%m-%y",
+    "%Y-%m-%d",
+    "%Y/%m/%d",
+    "%d %b %Y",
+    "%d %B %Y",
+    "%b %d %Y",
+    "%B %d %Y",
+    "%d%b%Y",
+    "%d%b%y",
+    "%d/%b/%Y",
+    "%d-%b-%Y",
+    "%d.%m.%Y",
+    "%d.%m.%y",
 )
 
 
@@ -54,7 +66,9 @@ def validate_abn(value: str) -> bool:
         return False
     weights = (10, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19)
     first = int(digits[0]) - 1
-    total = first * weights[0] + sum(int(d) * w for d, w in zip(digits[1:], weights[1:]))
+    total = first * weights[0] + sum(
+        int(d) * w for d, w in zip(digits[1:], weights[1:], strict=True)
+    )
     return total % 89 == 0
 
 

@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 
 from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError, VerificationError
+from argon2.exceptions import VerificationError, VerifyMismatchError
 from argon2.low_level import Type
 from sqlalchemy.orm import Session
 
@@ -24,24 +24,32 @@ class UserService:
     def first_run_required(self, session: Session) -> bool:
         return session.query(User).count() == 0
 
-    def create_first_admin(self, session: Session, username: str, display_name: str,
-                           password: str) -> User:
+    def create_first_admin(
+        self, session: Session, username: str, display_name: str, password: str
+    ) -> User:
         if not self.first_run_required(session):
             raise ValueError("first administrator already exists")
         if not password:
             raise ValueError("password is required")
-        user = User(username=username.strip(), display_name=display_name.strip(),
-                    password_hash=self.hasher.hash(password), active=True)
+        user = User(
+            username=username.strip(),
+            display_name=display_name.strip(),
+            password_hash=self.hasher.hash(password),
+            active=True,
+        )
         session.add(user)
         session.flush()
         return user
 
-    def add_user(self, session: Session, username: str, display_name: str,
-                 password: str) -> User:
+    def add_user(self, session: Session, username: str, display_name: str, password: str) -> User:
         if not password:
             raise ValueError("password is required")
-        user = User(username=username.strip(), display_name=display_name.strip(),
-                    password_hash=self.hasher.hash(password), active=True)
+        user = User(
+            username=username.strip(),
+            display_name=display_name.strip(),
+            password_hash=self.hasher.hash(password),
+            active=True,
+        )
         session.add(user)
         session.flush()
         return user

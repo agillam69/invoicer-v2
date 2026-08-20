@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
@@ -13,11 +14,13 @@ from invoice_manager.persistence.models import Base
 def create_database(url: str = "sqlite:///invoicer.sqlite3") -> Engine:
     engine = create_engine(url, future=True)
     if engine.url.get_backend_name() == "sqlite":
+
         @event.listens_for(engine, "connect")
-        def _enable_foreign_keys(dbapi_connection: object, _connection_record: object) -> None:
+        def _enable_foreign_keys(dbapi_connection: Any, _connection_record: Any) -> None:
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.close()
+
     return engine
 
 

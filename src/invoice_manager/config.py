@@ -17,10 +17,19 @@ class AppPaths:
 
     @classmethod
     def resolve(cls, root: Path | None = None) -> AppPaths:
-        base = root or Path(os.environ.get("INVOICER_DATA_DIR", Path.home() / "InvoiceReceiptManager"))
+        base = root or Path(
+            os.environ.get("INVOICER_DATA_DIR", Path.home() / "InvoiceReceiptManager")
+        )
         data = base / "data"
-        return cls(base, data, data / "business.sqlite3", base / "documents",
-                   base / "exports", base / "backups", base / "logs")
+        return cls(
+            base,
+            data,
+            data / "business.sqlite3",
+            base / "documents",
+            base / "exports",
+            base / "backups",
+            base / "logs",
+        )
 
     def ensure(self) -> AppPaths:
         for path in (self.data, self.documents, self.exports, self.backups, self.logs):

@@ -15,10 +15,19 @@ from invoice_manager.domain.validation import (
 )
 
 
-@pytest.mark.parametrize("value", ["25/06/2026", "25-06-2026", "5/6/26",
-                                   "2026-06-25", "25 Jun 2026", "25Jun2026"])
-def test_tolerant_dates(value: str) -> None:
-    assert parse_typed_date(value) == date(2026, 6, 25)
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("25/06/2026", date(2026, 6, 25)),
+        ("25-06-2026", date(2026, 6, 25)),
+        ("5/6/26", date(2026, 6, 5)),
+        ("2026-06-25", date(2026, 6, 25)),
+        ("25 Jun 2026", date(2026, 6, 25)),
+        ("25Jun2026", date(2026, 6, 25)),
+    ],
+)
+def test_tolerant_dates(value: str, expected: date) -> None:
+    assert parse_typed_date(value) == expected
 
 
 @pytest.mark.parametrize("value", ["31/02/2026", "not a date", ""])
