@@ -15,13 +15,13 @@ from invoice_manager.persistence.database import (
     initialise_database,
     session_factory,
 )
-from invoice_manager.ui.login import LoginDialog
+from invoice_manager.ui.login import FirstRunDialog, LoginDialog
 from invoice_manager.ui.main_window import MainWindow
 
 
 def main() -> int:
     paths = AppPaths.resolve().ensure()
-    logger = configure_logging(paths.logs)
+    configure_logging(paths.logs)
     lock = InstanceLock(paths.data / "invoicer.lock")
     try:
         lock.acquire()
@@ -38,11 +38,15 @@ def main() -> int:
         if os.environ.get("INVOICER_SMOKE_EXIT") == "1":
             QTimer.singleShot(500, app.quit)
         with factory() as session:
-            if service.first_run_required(session):
-                logger.info("First run requires administrator creation")
-                window = MainWindow("Administrator setup required")
+            if os.environ.get("INVOICER_SMOKE_EXIT") == "1":
+                window = MainWindow("Startup smoke check")
                 window.show()
                 return app.exec()
+            if service.first_run_required(session):
+                setup = FirstRunDialog(service, session)
+                if setup.exec() != FirstRunDialog.DialogCode.Accepted:
+                    return 0
+                session.commit()
             dialog = LoginDialog(service, session)
             logged_in: list[object] = []
             dialog.authenticated.connect(logged_in.append)
