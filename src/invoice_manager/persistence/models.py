@@ -17,6 +17,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from invoice_manager.persistence.clock import utc_now
+
 
 class Base(DeclarativeBase):
     pass
@@ -30,7 +32,7 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(Text)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     force_password_change: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
@@ -46,7 +48,7 @@ class BusinessProfile(Base):
     gst_registered: Mapped[bool] = mapped_column(Boolean, default=False)
     gst_rate: Mapped[Decimal] = mapped_column(Numeric(8, 4), default=Decimal("0"))
     currency: Mapped[str] = mapped_column(String(3), default="AUD")
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class Client(Base):
@@ -62,8 +64,8 @@ class Client(Base):
     default_terms_days: Mapped[int] = mapped_column(Integer, default=14)
     default_notes: Mapped[str] = mapped_column(Text, default="")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class Category(Base):
@@ -131,8 +133,8 @@ class Invoice(Base):
     correction_reason: Mapped[str | None] = mapped_column(Text)
     source: Mapped[str] = mapped_column(String(30), default="manual")
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     items: Mapped[list[InvoiceItem]] = relationship(
         back_populates="invoice", cascade="all, delete-orphan"
     )
@@ -197,7 +199,7 @@ class Payment(Base):
     reversed_at: Mapped[datetime | None] = mapped_column(DateTime)
     reversal_reason: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     __table_args__ = (CheckConstraint("amount_cents > 0", name="ck_payment_positive"),)
 
 
@@ -213,7 +215,7 @@ class Document(Base):
     sha256: Mapped[str] = mapped_column(String(64), index=True)
     mime_type: Mapped[str] = mapped_column(String(120), default="application/pdf")
     source: Mapped[str] = mapped_column(String(30), default="generated")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     missing_last_checked: Mapped[datetime | None] = mapped_column(DateTime)
 
 
@@ -225,7 +227,7 @@ class Receipt(Base):
     payment_id: Mapped[int] = mapped_column(
         ForeignKey("payments.id", ondelete="CASCADE"), unique=True
     )
-    issued_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     document_id: Mapped[int | None] = mapped_column(ForeignKey("documents.id", ondelete="SET NULL"))
     source: Mapped[str] = mapped_column(String(30), default="generated")
 
@@ -244,7 +246,7 @@ class CreditNote(Base):
     total_cents: Mapped[int] = mapped_column(Integer, default=0)
     voided: Mapped[bool] = mapped_column(Boolean, default=False)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     __table_args__ = (
         CheckConstraint(
             "subtotal_cents >= 0 AND gst_cents >= 0 AND total_cents >= 0", name="ck_credit_money"
@@ -298,7 +300,9 @@ class LedgerEntry(Base):
 class AuditEvent(Base):
     __tablename__ = "audit_events"
     id: Mapped[int] = mapped_column(primary_key=True)
-    timestamp_utc: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    timestamp_utc: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, index=True
+    )
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     action: Mapped[str] = mapped_column(String(80))
     entity_type: Mapped[str] = mapped_column(String(80))
@@ -316,14 +320,14 @@ class NumberSequence(Base):
     prefix: Mapped[str] = mapped_column(String(10))
     next_value: Mapped[int] = mapped_column(Integer, default=1)
     padding: Mapped[int] = mapped_column(Integer, default=4)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     __table_args__ = (CheckConstraint("next_value > 0 AND padding > 0", name="ck_sequence_values"),)
 
 
 class MigrationRun(Base):
     __tablename__ = "migration_runs"
     id: Mapped[int] = mapped_column(primary_key=True)
-    started: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    started: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     finished: Mapped[datetime | None] = mapped_column(DateTime)
     source_description: Mapped[str] = mapped_column(Text)
     source_manifest_hash: Mapped[str] = mapped_column(String(64), default="")

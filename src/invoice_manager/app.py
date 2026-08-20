@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import os
 import sys
 
-from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from invoice_manager.application.auth import UserService
@@ -12,7 +10,7 @@ from invoice_manager.infrastructure.instance_lock import InstanceLock
 from invoice_manager.infrastructure.logging_setup import configure_logging
 from invoice_manager.persistence.database import (
     create_database,
-    initialise_database,
+    migrate_database,
     session_factory,
 )
 from invoice_manager.ui.login import FirstRunDialog, LoginDialog
@@ -31,17 +29,11 @@ def main() -> int:
         return 1
     try:
         engine = create_database(f"sqlite:///{paths.database.as_posix()}")
-        initialise_database(engine)
+        migrate_database(engine)
         factory = session_factory(engine)
         service = UserService()
         app = QApplication.instance() or QApplication(sys.argv)
-        if os.environ.get("INVOICER_SMOKE_EXIT") == "1":
-            QTimer.singleShot(500, app.quit)
         with factory() as session:
-            if os.environ.get("INVOICER_SMOKE_EXIT") == "1":
-                window = MainWindow("Startup smoke check")
-                window.show()
-                return app.exec()
             if service.first_run_required(session):
                 setup = FirstRunDialog(service, session)
                 if setup.exec() != FirstRunDialog.DialogCode.Accepted:
@@ -53,7 +45,11 @@ def main() -> int:
             if dialog.exec() != LoginDialog.DialogCode.Accepted:
                 return 0
             user = logged_in[0] if logged_in else None
-            shell = MainWindow(getattr(user, "display_name", ""))
+            shell = MainWindow(
+                getattr(user, "display_name", ""),
+                data_location=paths.root,
+                log_path=paths.logs / "app.log",
+            )
             shell.show()
             return app.exec()
     finally:

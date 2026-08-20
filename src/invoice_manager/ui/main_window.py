@@ -1,15 +1,24 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+from PySide6 import __version__ as pyside_version
+from PySide6.QtCore import qVersion
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QMenu,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
+
+from invoice_manager import __version__
+from invoice_manager.ui.app_log import AppLogDialog
 
 DESTINATIONS = (
     "Dashboard",
@@ -24,7 +33,12 @@ DESTINATIONS = (
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, user_display_name: str = "") -> None:
+    def __init__(
+        self,
+        user_display_name: str = "",
+        data_location: Path | None = None,
+        log_path: Path | None = None,
+    ) -> None:
         super().__init__()
         self.setWindowTitle("Invoicer V2")
         self.resize(1100, 720)
@@ -56,11 +70,15 @@ class MainWindow(QMainWindow):
         central_layout.addWidget(self.nav)
         central_layout.addWidget(self.pages, 1)
         self.setCentralWidget(central)
+        self._data_location = data_location
+        self._log_path = log_path or Path.cwd() / "app.log"
         self._build_menu()
         self.statusBar().showMessage(f"Signed in: {user_display_name}" if user_display_name else "")
 
     def _build_menu(self) -> None:
-        menu = self.menuBar().addMenu("&Application")
+        menu = QMenu("&Application", self.menuBar())
+        self.menuBar().addMenu(menu)
+        self.application_menu = menu
         for label in (
             "Settings",
             "Import/Migrate",
@@ -74,5 +92,31 @@ class MainWindow(QMainWindow):
             "About",
         ):
             action = menu.addAction(label)
-            action.setEnabled(False)
-            action.setToolTip("Available in a later phase")
+            if label == "App Log":
+                action.triggered.connect(self._show_app_log)
+            elif label == "About":
+                action.triggered.connect(self._show_about)
+            else:
+                action.setEnabled(False)
+                action.setToolTip("Available in a later phase")
+
+    def _show_about(self) -> None:
+        from PySide6.QtWidgets import QMessageBox
+
+        location = str(self._data_location) if self._data_location else "Not configured"
+        QMessageBox.about(
+            self,
+            "About Invoicer V2",
+            (
+                f"Invoicer V2 {__version__}\n\n"
+                f"Data location: {location}\n"
+                f"Python: {sys.version.split()[0]}\n"
+                f"Qt: {qVersion()}\n"
+                f"PySide6: {pyside_version}"
+            ),
+        )
+
+    def _show_app_log(self) -> None:
+        if self._log_path is not None:
+            dialog = AppLogDialog(self._log_path)
+            dialog.exec()

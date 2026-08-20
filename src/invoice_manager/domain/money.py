@@ -30,19 +30,19 @@ def dollars_to_cents(value: Decimal | str | int) -> int:
         value = value.replace(",", "")
     amount = _decimal(value).quantize(CENT, rounding=ROUND_HALF_UP)
     cents = int(amount * 100)
-    if cents < 0:
-        raise MoneyError("money cannot be negative")
     return cents
 
 
 def cents_to_decimal(cents: int) -> Decimal:
-    if not isinstance(cents, int) or isinstance(cents, bool) or cents < 0:
-        raise MoneyError("cents must be a non-negative integer")
+    if not isinstance(cents, int) or isinstance(cents, bool):
+        raise MoneyError("cents must be an integer")
     return (Decimal(cents) / 100).quantize(CENT)
 
 
-def format_aud(cents: int) -> str:
-    return f"A${cents_to_decimal(cents):,.2f}"
+def format_aud(cents: int, currency_symbol: str = "$") -> str:
+    amount = cents_to_decimal(cents)
+    sign = "-" if amount < 0 else ""
+    return f"{sign}{currency_symbol}{abs(amount):,.2f}"
 
 
 def parse_aud(value: str | Decimal | int) -> int:

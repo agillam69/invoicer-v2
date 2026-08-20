@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError, VerifyMismatchError
 from argon2.low_level import Type
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from invoice_manager.persistence.clock import utc_now
 from invoice_manager.persistence.models import User
 from invoice_manager.persistence.repositories import UserRepository
 
@@ -22,7 +23,7 @@ class UserService:
         self.delay_seconds = delay_seconds
 
     def first_run_required(self, session: Session) -> bool:
-        return session.query(User).count() == 0
+        return session.scalar(select(func.count()).select_from(User)) == 0
 
     def create_first_admin(
         self, session: Session, username: str, display_name: str, password: str
@@ -63,7 +64,7 @@ class UserService:
         except (AuthenticationError, VerifyMismatchError, VerificationError) as exc:
             time.sleep(self.delay_seconds)
             raise AuthenticationError("invalid username or password") from exc
-        user.last_login_at = datetime.utcnow()
+        user.last_login_at = utc_now()
         return user
 
     def disable(self, user: User) -> None:

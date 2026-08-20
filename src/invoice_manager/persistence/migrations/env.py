@@ -2,6 +2,7 @@ from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
+from sqlalchemy.engine import Connection
 
 from invoice_manager.persistence.models import Base
 
@@ -22,6 +23,12 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
+    connection = config.attributes.get("connection")
+    if isinstance(connection, Connection):
+        context.configure(connection=connection, target_metadata=target_metadata)
+        with context.begin_transaction():
+            context.run_migrations()
+        return
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",

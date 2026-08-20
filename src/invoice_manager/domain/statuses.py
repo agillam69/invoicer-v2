@@ -31,16 +31,14 @@ def derive_status(
     if status_override:
         raise ValueError("only Draft, Cancelled, and Void may be stored overrides")
     balance = total_cents - payment_cents - credit_cents
-    if balance < 0:
-        raise ValueError("payments and credits exceed invoice total")
-    if balance == 0:
+    if balance <= 0:
         return (
             InvoiceStatus.CREDITED
             if credit_cents > 0 and payment_cents == 0
             else InvoiceStatus.PAID
         )
-    if payment_cents > 0 or credit_cents > 0:
-        return InvoiceStatus.PART_PAID
     if due_date is not None and due_date < (today or date.today()):
         return InvoiceStatus.OVERDUE
+    if payment_cents > 0 or credit_cents > 0:
+        return InvoiceStatus.PART_PAID
     return InvoiceStatus.ISSUED

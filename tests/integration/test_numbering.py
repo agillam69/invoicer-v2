@@ -1,9 +1,16 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
+from pathlib import Path
 
 import pytest
 from sqlalchemy.exc import IntegrityError
 
 from invoice_manager.application.numbering import NumberingService
+from invoice_manager.persistence.database import (
+    create_database,
+    initialise_database,
+    session_factory,
+)
 from invoice_manager.persistence.models import Client, Invoice, NumberSequence
 
 
@@ -47,4 +54,25 @@ def test_all_document_sequence_types(session) -> None:
     service = NumberingService()
     assert service.reserve(session, "receipt") == "RCT-0001"
     assert service.reserve(session, "credit_note") == "CN-0001"
-    assert session.query(NumberSequence).count() == 2
+    assert session.query(NumberSequence).count() == 3
+
+
+def test_concurrent_reservations_are_serialized(tmp_path: Path) -> None:
+    database = tmp_path / "concurrent.sqlite3"
+    setup_engine = create_database(f"sqlite:///{database.as_posix()}")
+    initialise_database(setup_engine)
+    setup_engine.dispose()
+
+    def reserve_number() -> str:
+        engine = create_database(f"sqlite:///{database.as_posix()}")
+        try:
+            with session_factory(engine)() as value:
+                number = NumberingService().reserve(value, "invoice")
+                value.commit()
+                return number
+        finally:
+            engine.dispose()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        numbers = list(pool.map(lambda _: reserve_number(), range(2)))
+    assert sorted(numbers) == ["INV-0001", "INV-0002"]

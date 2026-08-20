@@ -17,12 +17,17 @@ def test_full_invoice_status_table() -> None:
         derive_status(total_cents=100, payment_cents=25, due_date=date(2026, 6, 26), today=TODAY)
         == InvoiceStatus.PART_PAID
     )
+    assert (
+        derive_status(total_cents=100, payment_cents=25, due_date=date(2026, 6, 24), today=TODAY)
+        == InvoiceStatus.OVERDUE
+    )
     assert derive_status(total_cents=100, payment_cents=100, today=TODAY) == InvoiceStatus.PAID
     assert (
         derive_status(total_cents=100, due_date=date(2026, 6, 24), today=TODAY)
         == InvoiceStatus.OVERDUE
     )
     assert derive_status(total_cents=100, credit_cents=100, today=TODAY) == InvoiceStatus.CREDITED
+    assert derive_status(total_cents=100, payment_cents=50, credit_cents=50) == InvoiceStatus.PAID
     assert derive_status(total_cents=100, status_override="Cancelled") == InvoiceStatus.CANCELLED
     assert derive_status(total_cents=100, status_override="Void") == InvoiceStatus.VOID
 

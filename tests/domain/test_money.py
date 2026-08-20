@@ -15,7 +15,9 @@ from invoice_manager.domain.money import (
 def test_money_uses_integer_cents_and_aud_format() -> None:
     assert dollars_to_cents("1,234.56") == 123456
     assert parse_aud("A$12.50") == 1250
-    assert format_aud(1250) == "A$12.50"
+    assert format_aud(1250) == "$12.50"
+    assert format_aud(-1250) == "-$12.50"
+    assert format_aud(1250, "A$") == "A$12.50"
 
 
 @pytest.mark.parametrize(("value", "expected"), [("1.004", 100), ("1.005", 101), ("0.005", 1)])

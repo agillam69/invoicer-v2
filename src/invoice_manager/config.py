@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +15,10 @@ class AppPaths:
     exports: Path
     backups: Path
     logs: Path
+
+    @property
+    def settings_file(self) -> Path:
+        return self.root / "settings.json"
 
     @classmethod
     def resolve(cls, root: Path | None = None) -> AppPaths:
@@ -41,3 +46,16 @@ class AppPaths:
     @property
     def onedrive_warning(self) -> bool:
         return "onedrive" in str(self.root).lower()
+
+
+@dataclass(frozen=True)
+class AppSettings:
+    currency_symbol: str = "$"
+
+    @classmethod
+    def load(cls, path: Path) -> AppSettings:
+        if not path.exists():
+            return cls()
+        with path.open(encoding="utf-8") as handle:
+            values = json.load(handle)
+        return cls(currency_symbol=str(values.get("currency_symbol", "$")))
