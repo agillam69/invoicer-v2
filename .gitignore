@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Windows
+Thumbs.db
+Desktop.ini
+*.lnk
+
+# PySide6 / Qt
+*.qmlc
+*.jsc
+
+# Build and packaging
+build/
+dist/
+*.spec
+*.exe
+*.msi
+
+# Application data
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+*.zip
+backups/
+logs/
+exports/
+
+# IDE
+.vscode/
+.idea/
+*.user
+
+# Secrets
+.env
+.env.*
+!.env.example

@@ -1,0 +1,77 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "invoice-manager"
+version = "0.1.0"
+description = "Invoicer V2 — local Australian invoice and receipt manager"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "PySide6==6.9.1",
+  "SQLAlchemy==2.0.43",
+  "alembic==1.16.4",
+  "reportlab==4.4.3",
+  "openpyxl==3.1.5",
+  "argon2-cffi==25.1.0",
+  "pypdf==6.0.0",
+  "pdfplumber==0.11.7",
+]
+
+[project.scripts]
+invoice-manager = "invoice_manager.app:main"
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.4.1",
+  "pytest-qt==4.5.0",
+  "pytest-cov==6.2.1",
+  "hypothesis==6.136.9",
+  "ruff==0.12.7",
+  "mypy==1.17.1",
+  "pyinstaller==6.14.2",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.12"
+strict = false
+warn_unused_configs = true
+disallow_untyped_defs = false
+plugins = []
+
+[[tool.mypy.overrides]]
+module = ["invoice_manager.domain.*", "invoice_manager.application.*"]
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "unit: isolated domain tests",
+  "domain: financial domain tests",
+  "integration: repository and service integration tests",
+  "migration: migration/import tests",
+  "pdf: document generation tests",
+  "gui: PySide6 GUI tests",
+  "e2e: end-to-end acceptance tests",
+]
+addopts = "--cov=invoice_manager --cov-report=term-missing"
