@@ -35,9 +35,7 @@ def create_database(url: str = "sqlite:///invoicer.sqlite3") -> Engine:
 
 def initialise_database(engine: Engine) -> None:
     Base.metadata.create_all(engine)
-    with engine.begin() as connection:
-        for seed in SEQUENCE_SEEDS:
-            connection.execute(insert(NumberSequence).values(**seed).prefix_with("OR IGNORE"))
+    initialise_database_sequences(engine)
 
 
 def migrate_database(engine: Engine) -> None:

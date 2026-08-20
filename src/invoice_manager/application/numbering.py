@@ -28,7 +28,7 @@ class NumberingService:
         )
         if result.rowcount == 0:
             new_sequence = NumberSequence(
-                sequence_type=sequence_type, prefix=prefix, next_value=1, padding=padding
+                sequence_type=sequence_type, prefix=prefix, next_value=2, padding=padding
             )
             session.add(new_sequence)
             session.flush()
