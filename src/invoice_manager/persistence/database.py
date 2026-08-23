@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -17,6 +18,7 @@ SEQUENCE_SEEDS = (
     {"sequence_type": "receipt", "prefix": "RCT-", "next_value": 1, "padding": 4},
     {"sequence_type": "credit_note", "prefix": "CN-", "next_value": 1, "padding": 4},
 )
+logger = logging.getLogger("invoice_manager")
 
 
 def create_database(url: str = "sqlite:///invoicer.sqlite3") -> Engine:
@@ -30,6 +32,10 @@ def create_database(url: str = "sqlite:///invoicer.sqlite3") -> Engine:
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.close()
 
+        @event.listens_for(engine, "begin")
+        def _begin_immediate(connection: Any) -> None:
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+
     return engine
 
 
@@ -39,12 +45,16 @@ def initialise_database(engine: Engine) -> None:
 
 
 def migrate_database(engine: Engine) -> None:
+    logger.info("Starting schema migration")
     config = Config(str(Path(__file__).resolve().parents[3] / "alembic.ini"))
     config.set_main_option("script_location", str(Path(__file__).resolve().parent / "migrations"))
     with engine.begin() as connection:
         config.attributes["connection"] = connection
         command.upgrade(config, "head")
     initialise_database_sequences(engine)
+    logger.disabled = False
+    logger.setLevel(logging.INFO)
+    logger.info("Schema migration complete")
 
 
 def initialise_database_sequences(engine: Engine) -> None:

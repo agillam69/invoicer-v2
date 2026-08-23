@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from sqlalchemy import select, update
+import threading
+
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from invoice_manager.persistence.clock import utc_now
@@ -11,12 +13,17 @@ SEQUENCES = {
     "receipt": ("RCT-", 4),
     "credit_note": ("CN-", 4),
 }
+_reservation_lock = threading.Lock()
 
 
 class NumberingService:
     """Reserves canonical numbers within the caller's transaction."""
 
     def reserve(self, session: Session, sequence_type: str) -> str:
+        with _reservation_lock:
+            return self._reserve(session, sequence_type)
+
+    def _reserve(self, session: Session, sequence_type: str) -> str:
         try:
             prefix, padding = SEQUENCES[sequence_type]
         except KeyError as exc:
@@ -25,8 +32,11 @@ class NumberingService:
             update(NumberSequence)
             .where(NumberSequence.sequence_type == sequence_type)
             .values(next_value=NumberSequence.next_value + 1, updated_at=utc_now())
+            .returning(NumberSequence.next_value)
         )
-        if result.rowcount == 0:
+        next_value = result.scalar_one_or_none()
+        result.close()
+        if next_value is None:
             new_sequence = NumberSequence(
                 sequence_type=sequence_type, prefix=prefix, next_value=2, padding=padding
             )
@@ -34,10 +44,5 @@ class NumberingService:
             session.flush()
             value = 1
         else:
-            sequence = session.scalar(
-                select(NumberSequence).where(NumberSequence.sequence_type == sequence_type)
-            )
-            if sequence is None:
-                raise RuntimeError("number sequence disappeared during reservation")
-            value = sequence.next_value - 1
+            value = next_value - 1
         return f"{prefix}{value:0{padding}d}"

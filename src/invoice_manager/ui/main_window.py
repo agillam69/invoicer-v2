@@ -77,6 +77,7 @@ class MainWindow(QMainWindow):
 
     def _build_menu(self) -> None:
         menu = QMenu("&Application", self.menuBar())
+        menu.setToolTipsVisible(True)
         self.menuBar().addMenu(menu)
         self.application_menu = menu
         for label in (

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 
 from argon2 import PasswordHasher
@@ -21,6 +22,7 @@ class UserService:
     def __init__(self, delay_seconds: float = 0.25) -> None:
         self.hasher = PasswordHasher(type=Type.ID)
         self.delay_seconds = delay_seconds
+        self.logger = logging.getLogger("invoice_manager")
 
     def first_run_required(self, session: Session) -> bool:
         return session.scalar(select(func.count()).select_from(User)) == 0
@@ -63,8 +65,10 @@ class UserService:
             self.hasher.verify(user.password_hash, password)
         except (AuthenticationError, VerifyMismatchError, VerificationError) as exc:
             time.sleep(self.delay_seconds)
+            self.logger.warning("Login failed")
             raise AuthenticationError("invalid username or password") from exc
         user.last_login_at = utc_now()
+        self.logger.info("Login succeeded")
         return user
 
     def disable(self, user: User) -> None:

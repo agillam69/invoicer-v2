@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QDialog, QFormLayout, QLineEdit, QPushButton, QVBoxLayout
+from PySide6.QtWidgets import QDialog, QFormLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout
 
 
 class LoginDialog(QDialog):
@@ -17,6 +17,9 @@ class LoginDialog(QDialog):
         self.username = QLineEdit()
         self.password = QLineEdit()
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.error_label = QLabel()
+        self.error_label.setStyleSheet("color: #b00020;")
+        self.error_label.setWordWrap(True)
         submit = QPushButton("Sign in")
         submit.clicked.connect(self._submit)
         form = QFormLayout()
@@ -24,6 +27,7 @@ class LoginDialog(QDialog):
         form.addRow("Password", self.password)
         layout = QVBoxLayout(self)
         layout.addLayout(form)
+        layout.addWidget(self.error_label)
         layout.addWidget(submit)
         self._submit_button = submit
 
@@ -34,8 +38,10 @@ class LoginDialog(QDialog):
             )
         except ValueError:
             self.password.clear()
-            self.setWindowTitle("Invoicer V2 — Sign in (invalid credentials)")
+            self.error_label.setText("Invalid username or password.")
             return
+        self.error_label.clear()
+        self.session.commit()
         self.authenticated.emit(user)
         self.accept()
 

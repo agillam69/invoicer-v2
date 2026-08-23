@@ -11,6 +11,9 @@ def test_first_admin_argon2id_and_login(session) -> None:
     session.commit()
     assert user.password_hash.startswith("$argon2id$")
     assert service.authenticate(session, "alex", "secret").id == user.id
+    session.commit()
+    session.expire_all()
+    assert session.get(type(user), user.id).last_login_at is not None
     with pytest.raises(AuthenticationError):
         service.authenticate(session, "alex", "wrong")
 

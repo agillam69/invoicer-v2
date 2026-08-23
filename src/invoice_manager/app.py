@@ -19,11 +19,14 @@ from invoice_manager.ui.main_window import MainWindow
 
 def main() -> int:
     paths = AppPaths.resolve().ensure()
-    configure_logging(paths.logs)
+    logger = configure_logging(paths.logs)
+    logger.info("Application startup")
+    logger.info("Resolved data location: %s", paths.root)
     lock = InstanceLock(paths.data / "invoicer.lock")
     try:
         lock.acquire()
     except RuntimeError as exc:
+        logger.warning("Single-instance refusal")
         app = QApplication.instance() or QApplication(sys.argv)
         QMessageBox.critical(None, "Invoicer V2", str(exc))
         return 1
@@ -54,3 +57,4 @@ def main() -> int:
             return app.exec()
     finally:
         lock.release()
+        logger.info("Application shutdown")
