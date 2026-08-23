@@ -5,7 +5,9 @@ import io
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
+from hashlib import sha256
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import select
@@ -13,14 +15,17 @@ from sqlalchemy.orm import Session, selectinload
 
 from invoice_manager.application.audit import AuditService
 from invoice_manager.application.numbering import NumberingService
+from invoice_manager.documents.invoice_pdf import InvoicePDF
 from invoice_manager.domain.invoice_calculations import calculate_invoice, calculate_line
 from invoice_manager.domain.statuses import InvoiceStatus, derive_status
 from invoice_manager.persistence.clock import utc_now
 from invoice_manager.persistence.models import (
+    AuditEvent,
     BusinessProfile,
     Client,
     CreditNote,
     CreditNoteItem,
+    Document,
     Invoice,
     InvoiceItem,
     Payment,
@@ -30,16 +35,16 @@ from invoice_manager.persistence.models import (
 
 @dataclass(frozen=True)
 class InvoiceItemData:
-    description: str
+    description: str | None
     quantity: Decimal | str | int
-    unit_price_cents: int
-    unit: str = "each"
+    unit_price_cents: int | None
+    unit: str | None = None
     service_item_id: int | None = None
     service_code: str = ""
     discount_type: str = "none"
     discount_value: Decimal | str | int = 0
-    taxable: bool = False
-    gst_rate: Decimal | str | int = 0
+    taxable: bool | None = None
+    gst_rate: Decimal | str | int | None = None
 
 
 def _snapshot_client(invoice: Invoice, client: Client) -> None:
@@ -96,20 +101,30 @@ class InvoiceService:
                     description=data.description or service.name,
                     unit=data.unit or service.unit,
                     unit_price_cents=(
-                        data.unit_price_cents if data.unit_price_cents else service.unit_price_cents
+                        data.unit_price_cents
+                        if data.unit_price_cents is not None
+                        else service.unit_price_cents
                     ),
                     service_code=data.service_code or service.code,
-                    taxable=data.taxable or service.taxable,
+                    taxable=data.taxable if data.taxable is not None else service.taxable,
                 )
-            if not data.description.strip():
+            if not data.description or not data.description.strip():
                 raise ValueError("item description is required")
+            if data.unit_price_cents is None:
+                raise ValueError("item price is required")
+            taxable = data.taxable if data.taxable is not None else False
+            gst_rate = (
+                data.gst_rate
+                if data.gst_rate is not None
+                else (invoice.gst_rate_snapshot or Decimal("0"))
+            )
             calculation = calculate_line(
                 data.quantity,
                 data.unit_price_cents,
                 discount_type=data.discount_type,
                 discount_value=data.discount_value,
-                taxable=data.taxable,
-                gst_rate=data.gst_rate,
+                taxable=taxable,
+                gst_rate=gst_rate,
             )
             calculations.append(calculation)
             invoice.items.append(
@@ -119,13 +134,13 @@ class InvoiceService:
                     service_code_snapshot=data.service_code,
                     description=data.description,
                     quantity_decimal=Decimal(str(data.quantity)),
-                    unit=data.unit,
+                    unit=data.unit or "each",
                     unit_price_cents=data.unit_price_cents,
                     discount_type=data.discount_type,
                     discount_value=Decimal(str(data.discount_value)),
                     discount_cents=calculation.discount_cents,
-                    taxable=data.taxable,
-                    gst_rate_decimal=Decimal(str(data.gst_rate)),
+                    taxable=taxable,
+                    gst_rate_decimal=Decimal(str(gst_rate)),
                     subtotal_cents=calculation.subtotal_cents,
                     gst_cents=calculation.gst_cents,
                     total_cents=calculation.total_cents,
@@ -173,6 +188,26 @@ class InvoiceService:
             summary="Created invoice draft",
             user_id=created_by,
         )
+        return invoice
+
+    def preview(
+        self,
+        session: Session,
+        client: Client,
+        items: Iterable[InvoiceItemData],
+        *,
+        invoice_date: date | None = None,
+        due_date: date | None = None,
+        business: BusinessProfile | None = None,
+    ) -> Invoice:
+        effective_date = invoice_date or date.today()
+        invoice = Invoice(
+            invoice_date=effective_date,
+            due_date=due_date or effective_date + timedelta(days=client.default_terms_days),
+        )
+        _snapshot_client(invoice, client)
+        _snapshot_business(invoice, business)
+        self._build_items(session, invoice, items)
         return invoice
 
     def save_draft(
@@ -354,12 +389,32 @@ class InvoiceService:
         return duplicate
 
     def reissue(
-        self, session: Session, invoice: Invoice, reason: str, *, user_id: int | None = None
+        self,
+        session: Session,
+        invoice: Invoice,
+        reason: str,
+        *,
+        user_id: int | None = None,
+        destination: Path | None = None,
+        currency_symbol: str = "$",
     ) -> str:
         if invoice.issued_at is None or not invoice.canonical_number:
             raise ValueError("only issued invoices can be reissued")
         if not reason.strip():
             raise ValueError("reason is required")
+        output = destination or Path("documents") / "invoices" / f"{invoice.canonical_number}.pdf"
+        InvoicePDF().generate(invoice, output, currency_symbol=currency_symbol, draft=False)
+        digest = sha256(output.read_bytes()).hexdigest()
+        document = Document(
+            entity_type="invoice",
+            entity_id=invoice.id,
+            document_type="invoice_pdf",
+            managed_relative_path=str(output),
+            original_filename=output.name,
+            sha256=digest,
+        )
+        session.add(document)
+        session.flush()
         self.audit.record(
             session,
             action="reissue",
@@ -380,15 +435,32 @@ class InvoiceService:
         total_cents: int,
         *,
         due_date: date | None = None,
+        gst_cents: int | None = None,
+        business: BusinessProfile | None = None,
         user_id: int | None = None,
     ) -> Invoice:
         if session.scalar(select(Invoice.id).where(Invoice.canonical_number == canonical_number)):
             raise ValueError("invoice number already exists")
+        if gst_cents is None and business is not None and business.gst_registered:
+            rate = Decimal(str(business.gst_rate))
+            if not 0 <= rate <= 1:
+                raise ValueError("GST rate must be a decimal fraction between 0 and 1")
+            subtotal_cents = int(
+                (Decimal(total_cents) / (Decimal("1") + rate)).quantize(
+                    Decimal("1"), ROUND_HALF_UP
+                )
+            )
+            gst_cents = total_cents - subtotal_cents
+        else:
+            gst_cents = gst_cents or 0
+            subtotal_cents = total_cents - gst_cents
+        if subtotal_cents < 0 or gst_cents < 0:
+            raise ValueError("GST split cannot exceed invoice total")
         invoice = Invoice(
             canonical_number=canonical_number,
             original_number=canonical_number,
             invoice_date=invoice_date,
-            due_date=due_date or invoice_date,
+            due_date=due_date or invoice_date + timedelta(days=client.default_terms_days),
             client_id=client.id,
             client_name_snapshot=client.display_name,
             client_abn_snapshot=client.abn,
@@ -396,8 +468,11 @@ class InvoiceService:
             client_email_snapshot=client.email,
             client_phone_snapshot=client.phone,
             client_address_snapshot=client.billing_address,
+            gst_registered_snapshot=business.gst_registered if business else False,
+            gst_rate_snapshot=business.gst_rate if business else Decimal("0"),
             total_cents=total_cents,
-            subtotal_cents=total_cents,
+            subtotal_cents=subtotal_cents,
+            gst_cents=gst_cents,
             issued_at=utc_now(),
             source="external",
             created_by=user_id,
@@ -427,17 +502,30 @@ class InvoiceService:
         if not reason.strip():
             raise ValueError("reason is required")
         values = list(items)
-        calculations = [
-            calculate_line(
-                item.quantity,
-                item.unit_price_cents,
-                discount_type=item.discount_type,
-                discount_value=item.discount_value,
-                taxable=item.taxable,
-                gst_rate=item.gst_rate,
+        if not values:
+            raise ValueError("at least one credit note item is required")
+        for item in values:
+            if not item.description or not item.description.strip():
+                raise ValueError("item description is required")
+            if item.unit_price_cents is None:
+                raise ValueError("item price is required")
+        calculations = []
+        for item in values:
+            assert item.unit_price_cents is not None
+            calculations.append(
+                calculate_line(
+                    item.quantity,
+                    item.unit_price_cents,
+                    discount_type=item.discount_type,
+                    discount_value=item.discount_value,
+                    taxable=item.taxable if item.taxable is not None else False,
+                    gst_rate=(
+                        item.gst_rate
+                        if item.gst_rate is not None
+                        else (invoice.gst_rate_snapshot or Decimal("0"))
+                    ),
+                )
             )
-            for item in values
-        ]
         totals = calculate_invoice(calculations)
         note = CreditNote(
             canonical_number=self.numbering.reserve(session, "credit_note"),
@@ -476,9 +564,7 @@ class InvoiceService:
         )
         return note
 
-    def history(self, session: Session, invoice: Invoice) -> list[Any]:
-        from invoice_manager.persistence.models import AuditEvent
-
+    def history(self, session: Session, invoice: Invoice) -> list[AuditEvent]:
         return list(
             session.scalars(
                 select(AuditEvent)
@@ -515,5 +601,13 @@ class InvoiceService:
         writer = csv.DictWriter(output, fieldnames=fields)
         writer.writeheader()
         for invoice in invoices or self.search(session):
-            writer.writerow({field: getattr(invoice, field) for field in fields})
+            writer.writerow(
+                {
+                    "canonical_number": invoice.canonical_number,
+                    "invoice_date": invoice.invoice_date,
+                    "due_date": invoice.due_date,
+                    "client_name_snapshot": invoice.client_name_snapshot,
+                    "total_cents": invoice.total_cents,
+                }
+            )
         return output.getvalue()

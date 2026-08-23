@@ -2,14 +2,15 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
-from typing import Any
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import (
+    BaseDocTemplate,
     HRFlowable,
     Paragraph,
     SimpleDocTemplate,
@@ -50,7 +51,7 @@ class InvoicePDF:
         title.fontSize = 20
         title.leading = 24
 
-        def on_page(canvas: Any, doc: Any) -> None:
+        def on_page(canvas: Canvas, doc: BaseDocTemplate) -> None:
             canvas.saveState()
             canvas.setFont("Helvetica", 8)
             canvas.setFillColor(colors.grey)
@@ -113,23 +114,31 @@ class InvoicePDF:
             story.append(Paragraph(f"<b>Reference:</b> {invoice.reference}", body))
             story.append(Spacer(1, 3 * mm))
 
-        rows = [["Description", "Qty", "Unit", "Unit price", "Discount", "GST", "Total"]]
+        headers = ["Description", "Qty", "Unit", "Unit price", "Discount"]
+        if invoice.gst_registered_snapshot:
+            headers.append("GST")
+        headers.append("Total")
+        rows = [headers]
         for item in sorted(invoice.items, key=lambda value: value.position):
-            rows.append(
-                [
-                    Paragraph(item.description.replace("&", "&amp;"), small),
-                    str(item.quantity_decimal),
-                    item.unit,
-                    format_aud(item.unit_price_cents, currency_symbol),
-                    format_aud(item.discount_cents, currency_symbol),
-                    format_aud(item.gst_cents, currency_symbol),
-                    format_aud(item.total_cents, currency_symbol),
-                ]
-            )
+            row = [
+                Paragraph(item.description.replace("&", "&amp;"), small),
+                str(item.quantity_decimal),
+                item.unit,
+                format_aud(item.unit_price_cents, currency_symbol),
+                format_aud(item.discount_cents, currency_symbol),
+            ]
+            if invoice.gst_registered_snapshot:
+                row.append(format_aud(item.gst_cents, currency_symbol))
+            row.append(format_aud(item.total_cents, currency_symbol))
+            rows.append(row)
+        widths = [60 * mm, 15 * mm, 18 * mm, 24 * mm, 22 * mm]
+        if invoice.gst_registered_snapshot:
+            widths.append(18 * mm)
+        widths.append(24 * mm)
         item_table = Table(
             rows,
             repeatRows=1,
-            colWidths=[60 * mm, 15 * mm, 18 * mm, 24 * mm, 22 * mm, 18 * mm, 24 * mm],
+            colWidths=widths,
         )
         item_table.setStyle(
             TableStyle(
@@ -153,11 +162,10 @@ class InvoicePDF:
             )
         )
         story.extend([item_table, Spacer(1, 5 * mm)])
-        totals = [
-            ["Subtotal", format_aud(invoice.subtotal_cents, currency_symbol)],
-            ["GST", format_aud(invoice.gst_cents, currency_symbol)],
-            ["Total", format_aud(invoice.total_cents, currency_symbol)],
-        ]
+        totals = [["Subtotal", format_aud(invoice.subtotal_cents, currency_symbol)]]
+        if invoice.gst_registered_snapshot:
+            totals.append(["GST", format_aud(invoice.gst_cents, currency_symbol)])
+        totals.append(["Total", format_aud(invoice.total_cents, currency_symbol)])
         totals_table = Table(totals, colWidths=[35 * mm, 35 * mm], hAlign="RIGHT")
         totals_table.setStyle(
             TableStyle(

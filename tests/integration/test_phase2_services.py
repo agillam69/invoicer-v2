@@ -11,7 +11,10 @@ from invoice_manager.persistence.models import (
     AuditEvent,
     BusinessProfile,
     CreditNoteItem,
+    Document,
     Invoice,
+    NumberSequence,
+    Payment,
 )
 
 
@@ -28,7 +31,7 @@ def test_clients_services_and_invoice_snapshots(session) -> None:
         abn="12345678901",
         email="business@example.com",
         gst_registered=True,
-        gst_rate=Decimal("10"),
+        gst_rate=Decimal("0.1"),
     )
     session.add(business)
     session.flush()
@@ -109,3 +112,142 @@ def test_invoice_corrections_and_registration(session) -> None:
         session.scalar(select(CreditNoteItem).where(CreditNoteItem.credit_note_id == note.id))
         is not None
     )
+
+
+def test_catalogue_inheritance_allows_false_and_zero(session) -> None:
+    client = ClientService().create(session, display_name="Inheritance")
+    service = ServiceItemService().create(
+        session, name="Catalogue", unit_price_cents=500, taxable=True
+    )
+    invoice = InvoiceService().create_draft(
+        session,
+        client,
+        [
+            InvoiceItemData(
+                description=None,
+                quantity=1,
+                unit_price_cents=0,
+                service_item_id=service.id,
+                taxable=False,
+            )
+        ],
+    )
+    assert invoice.items[0].unit_price_cents == 0
+    assert invoice.items[0].taxable is False
+
+
+def test_external_gst_split_and_terms_due_date(session) -> None:
+    client = ClientService().create(session, display_name="External",)
+    client.default_terms_days = 30
+    business = BusinessProfile(gst_registered=True, gst_rate=Decimal("0.1"))
+    session.add(business)
+    session.flush()
+    invoice = InvoiceService().register_external(
+        session,
+        client,
+        "EXT-GST",
+        date(2026, 1, 1),
+        1100,
+        business=business,
+    )
+    assert invoice.subtotal_cents == 1000
+    assert invoice.gst_cents == 100
+    assert invoice.due_date == date(2026, 1, 31)
+
+
+def test_reissue_renders_document_without_reserving_number(session, tmp_path) -> None:
+    client = ClientService().create(session, display_name="Reissue")
+    service = InvoiceService()
+    invoice = service.create_draft(
+        session, client, [InvoiceItemData("Work", 1, 1000)]
+    )
+    service.issue(session, invoice)
+    before = session.scalar(
+        select(NumberSequence.next_value).where(NumberSequence.sequence_type == "invoice")
+    )
+    path = tmp_path / "reissued.pdf"
+    assert service.reissue(session, invoice, "Requested copy", destination=path) == invoice.canonical_number
+    assert path.exists()
+    assert (
+        session.scalar(
+            select(NumberSequence.next_value).where(NumberSequence.sequence_type == "invoice")
+        )
+        == before
+    )
+    document = session.scalar(select(Document).where(Document.entity_id == invoice.id))
+    assert document is not None
+
+
+def test_draft_delete_void_duplicate_and_credit_gst(session) -> None:
+    clients = ClientService()
+    invoices = InvoiceService()
+    client = clients.create(session, display_name="Lifecycle")
+    draft = invoices.create_draft(session, client, [InvoiceItemData("Line", 1, 100)])
+    invoices.delete_draft(session, draft)
+    session.flush()
+    assert session.get(Invoice, draft.id) is None
+    invoice = invoices.create_draft(
+        session,
+        client,
+        [InvoiceItemData("Taxed", 1, 1000, taxable=True, gst_rate=Decimal("0.1"))],
+    )
+    invoices.issue(session, invoice)
+    duplicate = invoices.duplicate_as_draft(session, invoice)
+    assert duplicate.canonical_number is None
+    assert len(duplicate.items) == 1
+    assert invoices.create_credit_note(
+        session,
+        invoice,
+        [InvoiceItemData("Taxed", 1, 1000, taxable=True, gst_rate=Decimal("0.1"))],
+        "Refund",
+    ).gst_cents == 100
+    invoices.void(session, invoice, "Duplicate source")
+    assert invoice.status_override == "Void"
+
+
+def test_rollup_tracks_paid_balance_and_overdue(session) -> None:
+    client = ClientService().create(session, display_name="Rollup")
+    invoice = Invoice(
+        invoice_date=date.today() - timedelta(days=10),
+        due_date=date.today() - timedelta(days=1),
+        client_id=client.id,
+        client_name_snapshot=client.display_name,
+        subtotal_cents=1000,
+        total_cents=1000,
+    )
+    session.add(invoice)
+    session.flush()
+    session.add(Payment(invoice_id=invoice.id, amount_cents=400))
+    session.flush()
+    rollup = ClientService().rollup(session, client)
+    assert rollup["billed_cents"] == 1000
+    assert rollup["paid_cents"] == 400
+    assert rollup["balance_cents"] == 600
+    assert rollup["overdue_cents"] == 600
+
+
+def test_deactivated_service_stays_valid_on_invoice_snapshot(session) -> None:
+    client = ClientService().create(session, display_name="Catalogue")
+    catalogue = ServiceItemService().create(
+        session, code="KEEP", name="Keep", unit_price_cents=100
+    )
+    invoice = InvoiceService().create_draft(
+        session,
+        client,
+        [InvoiceItemData(None, 1, None, service_item_id=catalogue.id)],
+    )
+    ServiceItemService().set_active(session, catalogue, False)
+    assert ServiceItemService().list(session, active_only=True) == []
+    assert invoice.items[0].service_item_id == catalogue.id
+    assert invoice.items[0].description == "Keep"
+
+
+def test_issued_invoice_mutations_raise_at_service_boundary(session) -> None:
+    client = ClientService().create(session, display_name="Immutable")
+    service = InvoiceService()
+    invoice = service.create_draft(session, client, [InvoiceItemData("Work", 1, 100)])
+    service.issue(session, invoice)
+    with pytest.raises(ValueError, match="immutable"):
+        service.save_draft(session, invoice, client, [InvoiceItemData("Changed", 1, 200)])
+    with pytest.raises(ValueError, match="immutable"):
+        service.delete_draft(session, invoice)

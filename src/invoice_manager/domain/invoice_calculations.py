@@ -34,6 +34,7 @@ def calculate_line(
     taxable: bool = False,
     gst_rate: Decimal | str | int = 0,
 ) -> LineCalculation:
+    """Calculate a line; GST rates are fractions, discount percentages are 0-100."""
     q = _decimal(quantity)
     if q <= 0 or not isinstance(unit_price_cents, int) or unit_price_cents < 0:
         raise MoneyError("quantity must be positive and unit price cannot be negative")
@@ -55,10 +56,10 @@ def calculate_line(
         raise MoneyError("discount cannot exceed gross amount")
     subtotal = gross - discount_cents
     rate = _decimal(gst_rate)
-    if taxable and rate < 0:
-        raise MoneyError("GST rate cannot be negative")
+    if not 0 <= rate <= 1:
+        raise MoneyError("GST rate must be a decimal fraction between 0 and 1")
     gst = (
-        int((Decimal(subtotal) * rate / 100).quantize(Decimal("1"), ROUND_HALF_UP))
+        int((Decimal(subtotal) * rate).quantize(Decimal("1"), ROUND_HALF_UP))
         if taxable
         else 0
     )

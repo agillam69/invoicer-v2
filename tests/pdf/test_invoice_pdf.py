@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 import pdfplumber
 from pypdf import PdfReader
@@ -6,6 +7,7 @@ from pypdf import PdfReader
 from invoice_manager.application.client_service import ClientService
 from invoice_manager.application.invoice_service import InvoiceItemData, InvoiceService
 from invoice_manager.documents.invoice_pdf import InvoicePDF
+from invoice_manager.persistence.models import BusinessProfile
 
 
 def test_invoice_pdf_contains_snapshots_and_draft_watermark(session, tmp_path) -> None:
@@ -41,3 +43,27 @@ def test_invoice_pdf_repeats_headers_on_multiple_pages(session, tmp_path) -> Non
     reader = PdfReader(path)
     assert len(reader.pages) >= 2
     assert all("Description" in (page.extract_text() or "") for page in reader.pages)
+
+
+def test_invoice_pdf_gst_columns_follow_registration_snapshot(session, tmp_path) -> None:
+    client = ClientService().create(session, display_name="Registered Client")
+    registered = BusinessProfile(gst_registered=True, gst_rate=Decimal("0.1"))
+    session.add(registered)
+    session.flush()
+    taxable = InvoiceService().create_draft(
+        session,
+        client,
+        [InvoiceItemData("Taxed", 1, 1000, taxable=True)],
+        business=registered,
+    )
+    taxable_path = InvoicePDF().generate(taxable, tmp_path / "taxable.pdf")
+    taxable_text = "\n".join(page.extract_text() or "" for page in PdfReader(taxable_path).pages)
+    assert "TAX INVOICE" in taxable_text
+    assert "GST" in taxable_text
+    regular = InvoiceService().create_draft(
+        session, client, [InvoiceItemData("Regular", 1, 1000)]
+    )
+    regular_path = InvoicePDF().generate(regular, tmp_path / "regular.pdf")
+    regular_text = "\n".join(page.extract_text() or "" for page in PdfReader(regular_path).pages)
+    assert "TAX INVOICE" not in regular_text
+    assert "GST" not in regular_text
