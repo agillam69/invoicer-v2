@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 from sqlalchemy.orm import Session
 
 from invoice_manager import __version__
+from invoice_manager.config import AppPaths
 from invoice_manager.ui.app_log import AppLogDialog
 from invoice_manager.ui.clients import ClientsView
 from invoice_manager.ui.invoice_editor import InvoiceEditorView
@@ -44,6 +45,7 @@ class MainWindow(QMainWindow):
         data_location: Path | None = None,
         log_path: Path | None = None,
         session: Session | None = None,
+        paths: AppPaths | None = None,
     ) -> None:
         super().__init__()
         self.setWindowTitle("Invoicer V2")
@@ -54,8 +56,9 @@ class MainWindow(QMainWindow):
         for destination in DESTINATIONS:
             QListWidgetItem(destination, self.nav)
         self.pages = QStackedWidget()
-        editor_view = InvoiceEditorView(session)
-        invoice_list_view = InvoiceListView(session)
+        resolved_paths = paths or AppPaths.resolve()
+        editor_view = InvoiceEditorView(session, paths=resolved_paths)
+        invoice_list_view = InvoiceListView(session, paths=resolved_paths)
         invoice_list_view.invoice_selected.connect(editor_view.load_invoice)
         for destination in DESTINATIONS:
             page: QWidget

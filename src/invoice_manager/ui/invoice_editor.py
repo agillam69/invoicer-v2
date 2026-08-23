@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import date
-from pathlib import Path
 
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QDesktopServices
@@ -25,7 +24,7 @@ from sqlalchemy.orm import Session
 from invoice_manager.application.client_service import ClientService
 from invoice_manager.application.invoice_service import InvoiceItemData, InvoiceService
 from invoice_manager.application.service_item_service import ServiceItemService
-from invoice_manager.documents.invoice_pdf import InvoicePDF
+from invoice_manager.config import AppPaths
 from invoice_manager.domain.money import format_aud
 from invoice_manager.persistence.models import BusinessProfile, Client, Invoice, ServiceItem
 
@@ -37,10 +36,12 @@ class InvoiceEditorView(QWidget):
         invoice: Invoice | None = None,
         *,
         invoice_service: InvoiceService | None = None,
+        paths: AppPaths | None = None,
     ) -> None:
         super().__init__()
         self.session = session
-        self.service = invoice_service or InvoiceService()
+        self.paths = paths or AppPaths.resolve()
+        self.service = invoice_service or InvoiceService(paths=self.paths)
         self.clients = ClientService()
         self.services = ServiceItemService()
         self.invoice = invoice
@@ -288,8 +289,7 @@ class InvoiceEditorView(QWidget):
         if invoice is None:
             QMessageBox.warning(self, "Invoice", "Add at least one line")
             return
-        path = Path.cwd() / "invoice-draft-preview.pdf"
-        InvoicePDF().generate(invoice, path, draft=True)
+        path = self.service.render_draft_preview(invoice)
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
     def _issue(self) -> None:

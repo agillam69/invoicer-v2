@@ -23,7 +23,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from invoice_manager.application.invoice_service import InvoiceService
+from invoice_manager.config import AppPaths
 from invoice_manager.domain.money import format_aud
+from invoice_manager.infrastructure.file_store import FileStore
 from invoice_manager.persistence.models import Document, Invoice
 
 
@@ -31,11 +33,17 @@ class InvoiceListView(QWidget):
     invoice_selected = Signal(object)
 
     def __init__(
-        self, session: Session | None = None, *, invoice_service: InvoiceService | None = None
+        self,
+        session: Session | None = None,
+        *,
+        invoice_service: InvoiceService | None = None,
+        paths: AppPaths | None = None,
     ) -> None:
         super().__init__()
         self.session = session
-        self.service = invoice_service or InvoiceService()
+        self.paths = paths or AppPaths.resolve()
+        self.files = FileStore(self.paths.root)
+        self.service = invoice_service or InvoiceService(paths=self.paths)
         self.search = QLineEdit()
         self.search.setObjectName("invoiceSearch")
         self.search.setPlaceholderText("Search invoices")
@@ -148,7 +156,15 @@ class InvoiceListView(QWidget):
         if document is None:
             QMessageBox.information(self, "Invoice", "No PDF is linked to this invoice")
             return
-        path = Path(document.external_path or document.managed_relative_path or "")
+        if document.external_path:
+            path = Path(document.external_path)
+        elif document.managed_relative_path:
+            try:
+                path = self.files.managed_path(document.managed_relative_path)
+            except ValueError:
+                path = Path()
+        else:
+            path = Path()
         if path.exists():
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
         else:
@@ -160,9 +176,16 @@ class InvoiceListView(QWidget):
             return
         path, _ = QFileDialog.getOpenFileName(self, "Relink invoice PDF", "", "PDF files (*.pdf)")
         if path:
-            document.external_path = path
-            document.original_filename = Path(path).name
-            document.sha256 = sha256(Path(path).read_bytes()).hexdigest()
+            chosen = Path(path).resolve()
+            document.original_filename = chosen.name
+            document.sha256 = sha256(chosen.read_bytes()).hexdigest()
+            managed_root = self.paths.documents.resolve()
+            if managed_root == chosen or managed_root in chosen.parents:
+                document.managed_relative_path = chosen.relative_to(self.paths.root).as_posix()
+                document.external_path = None
+            else:
+                document.managed_relative_path = None
+                document.external_path = str(chosen)
             self.session.commit()
 
     def _history(self) -> None:

@@ -1,9 +1,11 @@
 from datetime import date
+from pathlib import Path
 
 import pytest
 
 from invoice_manager.application.client_service import ClientService
 from invoice_manager.application.invoice_service import InvoiceItemData, InvoiceService
+from invoice_manager.config import AppPaths
 from invoice_manager.ui.invoice_editor import InvoiceEditorView
 from invoice_manager.ui.invoice_list import InvoiceListView
 
@@ -30,9 +32,10 @@ def test_editor_line_totals_and_save_reload(qtbot, session) -> None:
 
 
 @pytest.mark.gui
-def test_editor_issue_assigns_one_number(qtbot, session, monkeypatch) -> None:
+def test_editor_issue_assigns_one_number(qtbot, session, monkeypatch, tmp_path) -> None:
     client = ClientService().create(session, display_name="Issue GUI")
-    editor = InvoiceEditorView(session)
+    paths = AppPaths.resolve(tmp_path)
+    editor = InvoiceEditorView(session, paths=paths)
     qtbot.addWidget(editor)
     editor.client_combo.setCurrentIndex(editor.client_combo.findData(client.id))
     editor.description_input.setText("Work")
@@ -46,6 +49,31 @@ def test_editor_issue_assigns_one_number(qtbot, session, monkeypatch) -> None:
     editor._issue()
     assert editor.invoice is not None
     assert editor.invoice.canonical_number == "INV-0001"
+
+
+@pytest.mark.gui
+def test_editor_preview_uses_data_root_not_working_directory(
+    qtbot, session, monkeypatch, tmp_path
+) -> None:
+    client = ClientService().create(session, display_name="Preview GUI")
+    paths = AppPaths.resolve(tmp_path)
+    editor = InvoiceEditorView(session, paths=paths)
+    qtbot.addWidget(editor)
+    editor.client_combo.setCurrentIndex(editor.client_combo.findData(client.id))
+    editor.description_input.setText("Work")
+    editor.price_input.setText("100")
+    editor.add_line_button.click()
+    monkeypatch.setattr(
+        "invoice_manager.ui.invoice_editor.QDesktopServices.openUrl",
+        lambda *_args: True,
+    )
+    working_directory = Path.cwd()
+
+    editor._preview()
+
+    assert Path.cwd() == working_directory
+    assert not (working_directory / "invoice-draft-preview.pdf").exists()
+    assert (paths.exports / "invoice-previews" / "draft-preview.pdf").is_file()
 
 
 @pytest.mark.gui
@@ -65,3 +93,26 @@ def test_invoice_list_search_and_export(qtbot, session) -> None:
     view.search.setText("missing")
     assert view.table.rowCount() == 0
     assert "canonical_number" in view.service.export_csv(session)
+
+
+@pytest.mark.gui
+def test_invoice_list_resolves_managed_pdf(qtbot, session, monkeypatch, tmp_path) -> None:
+    client = ClientService().create(session, display_name="Managed PDF")
+    paths = AppPaths.resolve(tmp_path)
+    service = InvoiceService(paths=paths)
+    invoice = service.create_draft(session, client, [InvoiceItemData("Work", 1, 100)])
+    service.issue(session, invoice)
+    view = InvoiceListView(session, invoice_service=service, paths=paths)
+    qtbot.addWidget(view)
+    view._select(0, 0)
+    opened: list[str] = []
+    monkeypatch.setattr(
+        "invoice_manager.ui.invoice_list.QDesktopServices.openUrl",
+        lambda url: opened.append(url.toLocalFile()) or True,
+    )
+
+    view._open_pdf()
+
+    assert [Path(value).resolve() for value in opened] == [
+        (paths.documents / "invoices" / "INV-0001.pdf").resolve()
+    ]

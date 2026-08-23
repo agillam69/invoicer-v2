@@ -53,6 +53,7 @@ def main() -> int:
                 data_location=paths.root,
                 log_path=paths.logs / "app.log",
                 session=session,
+                paths=paths,
             )
             shell.show()
             return app.exec()

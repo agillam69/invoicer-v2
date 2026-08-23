@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from decimal import Decimal
+from hashlib import sha256
 
 import pytest
 from sqlalchemy import select
@@ -7,6 +8,7 @@ from sqlalchemy import select
 from invoice_manager.application.client_service import ClientService
 from invoice_manager.application.invoice_service import InvoiceItemData, InvoiceService
 from invoice_manager.application.service_item_service import ServiceItemService
+from invoice_manager.config import AppPaths
 from invoice_manager.persistence.models import (
     AuditEvent,
     BusinessProfile,
@@ -180,6 +182,69 @@ def test_reissue_renders_document_without_reserving_number(session, tmp_path) ->
     )
     document = session.scalar(select(Document).where(Document.entity_id == invoice.id))
     assert document is not None
+
+
+def test_issue_persists_managed_invoice_document(session, tmp_path) -> None:
+    paths = AppPaths.resolve(tmp_path)
+    client = ClientService().create(session, display_name="Issued PDF")
+    service = InvoiceService(paths=paths)
+    invoice = service.create_draft(session, client, [InvoiceItemData("Work", 1, 1000)])
+
+    service.issue(session, invoice)
+
+    document = session.scalar(
+        select(Document)
+        .where(Document.entity_type == "invoice", Document.entity_id == invoice.id)
+        .order_by(Document.created_at.desc())
+    )
+    assert document is not None
+    assert document.managed_relative_path == f"documents/invoices/{invoice.canonical_number}.pdf"
+    assert document.external_path is None
+    assert document.mime_type == "application/pdf"
+    path = paths.root / document.managed_relative_path
+    assert path.is_file()
+    assert paths.root.resolve() in path.resolve().parents
+    assert document.sha256 == sha256(path.read_bytes()).hexdigest()
+
+
+def test_reissue_rewrites_managed_document_without_reserving_number(session, tmp_path) -> None:
+    paths = AppPaths.resolve(tmp_path)
+    client = ClientService().create(session, display_name="Managed Reissue")
+    service = InvoiceService(paths=paths)
+    invoice = service.create_draft(session, client, [InvoiceItemData("Work", 1, 1000)])
+    service.issue(session, invoice)
+    before_sequence = session.scalar(
+        select(NumberSequence.next_value).where(NumberSequence.sequence_type == "invoice")
+    )
+    first_document = session.scalar(
+        select(Document)
+        .where(Document.entity_type == "invoice", Document.entity_id == invoice.id)
+        .order_by(Document.created_at.desc())
+    )
+    assert first_document is not None and first_document.managed_relative_path is not None
+    path = paths.root / first_document.managed_relative_path
+    first_bytes = path.read_bytes()
+
+    assert service.reissue(session, invoice, "Requested copy") == invoice.canonical_number
+
+    documents = list(
+        session.scalars(
+            select(Document)
+            .where(Document.entity_type == "invoice", Document.entity_id == invoice.id)
+            .order_by(Document.created_at)
+        )
+    )
+    assert len(documents) == 2
+    latest = documents[-1]
+    assert latest.managed_relative_path == first_document.managed_relative_path
+    assert path.read_bytes() != first_bytes
+    assert latest.sha256 == sha256(path.read_bytes()).hexdigest()
+    assert (
+        session.scalar(
+            select(NumberSequence.next_value).where(NumberSequence.sequence_type == "invoice")
+        )
+        == before_sequence
+    )
 
 
 def test_draft_delete_void_duplicate_and_credit_gst(session) -> None:
