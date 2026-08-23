@@ -21,6 +21,8 @@ from sqlalchemy.orm import Session
 from invoice_manager import __version__
 from invoice_manager.ui.app_log import AppLogDialog
 from invoice_manager.ui.clients import ClientsView
+from invoice_manager.ui.invoice_editor import InvoiceEditorView
+from invoice_manager.ui.invoice_list import InvoiceListView
 from invoice_manager.ui.services import ServicesView
 
 DESTINATIONS = (
@@ -52,15 +54,27 @@ class MainWindow(QMainWindow):
         for destination in DESTINATIONS:
             QListWidgetItem(destination, self.nav)
         self.pages = QStackedWidget()
+        editor_view = InvoiceEditorView(session)
+        invoice_list_view = InvoiceListView(session)
+        invoice_list_view.invoice_selected.connect(editor_view.load_invoice)
         for destination in DESTINATIONS:
             page: QWidget
-            if destination == "Clients":
+            if destination == "New Invoice":
+                page = editor_view
+            elif destination == "Invoices":
+                page = invoice_list_view
+            elif destination == "Clients":
                 page = ClientsView(session)
             elif destination == "Products & Services":
                 page = ServicesView(session)
             else:
                 page = QWidget()
-            if destination not in {"Clients", "Products & Services"}:
+            if destination not in {
+                "Clients",
+                "Products & Services",
+                "New Invoice",
+                "Invoices",
+            }:
                 page_layout = QVBoxLayout(page)
                 title = QLabel(destination)
                 title.setStyleSheet("font-size: 24px; font-weight: 600;")

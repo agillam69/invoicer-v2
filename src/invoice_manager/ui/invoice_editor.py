@@ -1,1 +1,336 @@
-"""Invoice editor reserved for Phase 3."""
+from __future__ import annotations
+
+from datetime import date
+from pathlib import Path
+
+from PySide6.QtCore import QUrl
+from PySide6.QtGui import QDesktopServices
+from PySide6.QtWidgets import (
+    QComboBox,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from invoice_manager.application.client_service import ClientService
+from invoice_manager.application.invoice_service import InvoiceItemData, InvoiceService
+from invoice_manager.application.service_item_service import ServiceItemService
+from invoice_manager.documents.invoice_pdf import InvoicePDF
+from invoice_manager.domain.money import format_aud
+from invoice_manager.persistence.models import BusinessProfile, Client, Invoice, ServiceItem
+
+
+class InvoiceEditorView(QWidget):
+    def __init__(
+        self,
+        session: Session | None = None,
+        invoice: Invoice | None = None,
+        *,
+        invoice_service: InvoiceService | None = None,
+    ) -> None:
+        super().__init__()
+        self.session = session
+        self.service = invoice_service or InvoiceService()
+        self.clients = ClientService()
+        self.services = ServiceItemService()
+        self.invoice = invoice
+        self.items: list[InvoiceItemData] = []
+        self.client_combo = QComboBox()
+        self.client_combo.setObjectName("invoiceClient")
+        self.service_combo = QComboBox()
+        self.service_combo.setObjectName("invoiceService")
+        self.description_input = QLineEdit()
+        self.description_input.setObjectName("invoiceDescription")
+        self.quantity_input = QLineEdit("1")
+        self.quantity_input.setObjectName("invoiceQuantity")
+        self.unit_input = QLineEdit("each")
+        self.price_input = QLineEdit("0")
+        self.price_input.setObjectName("invoiceUnitPrice")
+        self.taxable_input = QComboBox()
+        self.taxable_input.addItems(["No", "Yes"])
+        self.discount_input = QLineEdit("0")
+        self.invoice_date_input = QLineEdit(date.today().isoformat())
+        self.due_date_input = QLineEdit()
+        self.reference_input = QLineEdit()
+        self.notes_input = QTextEdit()
+        form = QFormLayout()
+        for label, widget in (
+            ("Client", self.client_combo),
+            ("Invoice date (YYYY-MM-DD)", self.invoice_date_input),
+            ("Due date (YYYY-MM-DD)", self.due_date_input),
+            ("Reference", self.reference_input),
+            ("Notes", self.notes_input),
+        ):
+            form.addRow(label, widget)
+        line_form = QFormLayout()
+        for label, widget in (
+            ("Catalogue service", self.service_combo),
+            ("Description", self.description_input),
+            ("Quantity", self.quantity_input),
+            ("Unit", self.unit_input),
+            ("Unit price (cents)", self.price_input),
+            ("Taxable", self.taxable_input),
+            ("Discount (%)", self.discount_input),
+        ):
+            line_form.addRow(label, widget)
+        self.add_line_button = QPushButton("Add line")
+        self.add_line_button.clicked.connect(self._add_line)
+        self.remove_line_button = QPushButton("Remove selected line")
+        self.remove_line_button.clicked.connect(self._remove_line)
+        line_actions = QHBoxLayout()
+        line_actions.addWidget(self.add_line_button)
+        line_actions.addWidget(self.remove_line_button)
+        self.lines_table = QTableWidget(0, 7)
+        self.lines_table.setObjectName("invoiceLines")
+        self.lines_table.setHorizontalHeaderLabels(
+            ["Description", "Qty", "Unit", "Price", "Taxable", "GST", "Total"]
+        )
+        self.lines_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.subtotal_label, self.gst_label, self.total_label = (
+            QLabel("$0.00"),
+            QLabel("$0.00"),
+            QLabel("$0.00"),
+        )
+        totals = QFormLayout()
+        totals.addRow("Subtotal", self.subtotal_label)
+        totals.addRow("GST", self.gst_label)
+        totals.addRow("Total", self.total_label)
+        actions = QHBoxLayout()
+        self.save_draft_button = QPushButton("Save draft")
+        self.delete_draft_button = QPushButton("Delete draft")
+        self.preview_button = QPushButton("Preview draft PDF")
+        self.issue_button = QPushButton("Issue invoice")
+        self.save_draft_button.clicked.connect(self._save)
+        self.delete_draft_button.clicked.connect(self._delete)
+        self.preview_button.clicked.connect(self._preview)
+        self.issue_button.clicked.connect(self._issue)
+        for button in (
+            self.save_draft_button,
+            self.delete_draft_button,
+            self.preview_button,
+            self.issue_button,
+        ):
+            actions.addWidget(button)
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("New Invoice"))
+        layout.addLayout(form)
+        layout.addLayout(line_form)
+        layout.addLayout(line_actions)
+        layout.addWidget(self.lines_table)
+        layout.addLayout(totals)
+        layout.addLayout(actions)
+        self._load_choices()
+        for field in (
+            self.description_input,
+            self.quantity_input,
+            self.unit_input,
+            self.price_input,
+            self.discount_input,
+        ):
+            field.textChanged.connect(self._refresh_lines)
+        self.taxable_input.currentTextChanged.connect(self._refresh_lines)
+        if invoice is not None:
+            self.load_invoice(invoice)
+
+    def _load_choices(self) -> None:
+        if self.session is None:
+            return
+        self.client_combo.clear()
+        for client in self.clients.list(self.session, active_only=True):
+            self.client_combo.addItem(client.display_name, client.id)
+        self.service_combo.clear()
+        self.service_combo.addItem("Custom line", None)
+        for item in self.services.list(self.session, active_only=True):
+            self.service_combo.addItem(f"{item.code} - {item.name}", item.id)
+        self.service_combo.currentIndexChanged.connect(self._apply_service)
+
+    def _apply_service(self) -> None:
+        if self.session is None:
+            return
+        item = self.session.get(ServiceItem, self.service_combo.currentData())
+        if item is not None:
+            self.description_input.setText(item.name)
+            self.unit_input.setText(item.unit)
+            self.price_input.setText(str(item.unit_price_cents))
+            self.taxable_input.setCurrentText("Yes" if item.taxable else "No")
+
+    def _line_data(self) -> InvoiceItemData:
+        service_id = self.service_combo.currentData()
+        discount = self.discount_input.text() or "0"
+        return InvoiceItemData(
+            description=self.description_input.text(),
+            quantity=self.quantity_input.text(),
+            unit_price_cents=int(self.price_input.text()),
+            unit=self.unit_input.text(),
+            service_item_id=service_id,
+            taxable=self.taxable_input.currentText() == "Yes",
+            discount_type="percentage" if discount not in {"0", "0.0", ""} else "none",
+            discount_value=discount,
+        )
+
+    def _add_line(self) -> None:
+        try:
+            self.items.append(self._line_data())
+            self._refresh_lines()
+        except (ValueError, TypeError) as exc:
+            QMessageBox.warning(self, "Invoice line", str(exc))
+
+    def _remove_line(self) -> None:
+        row = self.lines_table.currentRow()
+        if 0 <= row < len(self.items):
+            self.items.pop(row)
+            self._refresh_lines()
+
+    def _business(self) -> BusinessProfile | None:
+        return (
+            self.session.scalar(select(BusinessProfile).order_by(BusinessProfile.id))
+            if self.session is not None
+            else None
+        )
+
+    def _client(self) -> Client | None:
+        if self.session is None or self.client_combo.currentData() is None:
+            return None
+        return self.session.get(Client, self.client_combo.currentData())
+
+    def _preview_invoice(self) -> Invoice | None:
+        client = self._client()
+        if self.session is None or client is None or not self.items:
+            return None
+        business = self._business()
+        return self.service.preview(
+            self.session,
+            client,
+            self.items,
+            invoice_date=self._parse_date(self.invoice_date_input.text()),
+            due_date=self._parse_date(self.due_date_input.text()),
+            business=business,
+        )
+
+    def _refresh_lines(self) -> None:
+        preview = self._preview_invoice()
+        self.lines_table.setRowCount(0)
+        if preview is None:
+            for label in (self.subtotal_label, self.gst_label, self.total_label):
+                label.setText("$0.00")
+            return
+        for item in preview.items:
+            row = self.lines_table.rowCount()
+            self.lines_table.insertRow(row)
+            values = [
+                item.description,
+                str(item.quantity_decimal),
+                item.unit,
+                format_aud(item.unit_price_cents),
+                "Yes" if item.taxable else "No",
+                format_aud(item.gst_cents),
+                format_aud(item.total_cents),
+            ]
+            for column, value in enumerate(values):
+                self.lines_table.setItem(row, column, QTableWidgetItem(value))
+        self.subtotal_label.setText(format_aud(preview.subtotal_cents))
+        self.gst_label.setText(format_aud(preview.gst_cents))
+        self.total_label.setText(format_aud(preview.total_cents))
+
+    @staticmethod
+    def _parse_date(value: str) -> date | None:
+        try:
+            return date.fromisoformat(value) if value.strip() else None
+        except ValueError as exc:
+            raise ValueError("dates must use YYYY-MM-DD") from exc
+
+    def _save(self) -> None:
+        if self.session is None:
+            return
+        client = self._client()
+        if client is None:
+            QMessageBox.warning(self, "Invoice", "Select a client")
+            return
+        try:
+            self.invoice = self.service.save_draft(
+                self.session,
+                self.invoice,
+                client,
+                self.items,
+                invoice_date=self._parse_date(self.invoice_date_input.text()),
+                due_date=self._parse_date(self.due_date_input.text()),
+                business=self._business(),
+                reference=self.reference_input.text(),
+                visible_notes=self.notes_input.toPlainText(),
+            )
+            self.session.commit()
+        except (ValueError, TypeError) as exc:
+            QMessageBox.warning(self, "Invoice", str(exc))
+
+    def _delete(self) -> None:
+        if self.session is not None and self.invoice is not None:
+            try:
+                self.service.delete_draft(self.session, self.invoice)
+                self.session.commit()
+                self.invoice = None
+                self.items.clear()
+                self._refresh_lines()
+            except ValueError as exc:
+                QMessageBox.warning(self, "Invoice", str(exc))
+
+    def _preview(self) -> None:
+        invoice = self._preview_invoice()
+        if invoice is None:
+            QMessageBox.warning(self, "Invoice", "Add at least one line")
+            return
+        path = Path.cwd() / "invoice-draft-preview.pdf"
+        InvoicePDF().generate(invoice, path, draft=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+
+    def _issue(self) -> None:
+        if self.invoice is None:
+            self._save()
+        if self.session is None or self.invoice is None:
+            return
+        answer = QMessageBox.question(
+            self,
+            "Issue invoice",
+            "Issue this invoice? Once issued, its number, snapshots, and financial details become immutable.",
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            try:
+                self.service.issue(self.session, self.invoice)
+                self.session.commit()
+            except ValueError as exc:
+                QMessageBox.warning(self, "Invoice", str(exc))
+
+    def load_invoice(self, invoice: Invoice) -> None:
+        self.invoice = invoice
+        self.items = [
+            InvoiceItemData(
+                description=item.description,
+                quantity=item.quantity_decimal,
+                unit_price_cents=item.unit_price_cents,
+                unit=item.unit,
+                service_item_id=item.service_item_id,
+                service_code=item.service_code_snapshot,
+                discount_type=item.discount_type,
+                discount_value=item.discount_value,
+                taxable=item.taxable,
+                gst_rate=item.gst_rate_decimal,
+            )
+            for item in invoice.items
+        ]
+        index = self.client_combo.findData(invoice.client_id)
+        if index >= 0:
+            self.client_combo.setCurrentIndex(index)
+        self.invoice_date_input.setText(invoice.invoice_date.isoformat())
+        self.due_date_input.setText(invoice.due_date.isoformat())
+        self.reference_input.setText(invoice.reference)
+        self.notes_input.setPlainText(invoice.visible_notes)
+        self._refresh_lines()
