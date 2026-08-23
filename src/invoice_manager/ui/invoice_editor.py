@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 from PySide6.QtCore import QUrl
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QDesktopServices, QShowEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QFormLayout,
@@ -131,6 +131,7 @@ class InvoiceEditorView(QWidget):
         layout.addLayout(totals)
         layout.addLayout(actions)
         self._load_choices()
+        self.service_combo.currentIndexChanged.connect(self._apply_service)
         for field in (
             self.description_input,
             self.quantity_input,
@@ -143,6 +144,10 @@ class InvoiceEditorView(QWidget):
         if invoice is not None:
             self.load_invoice(invoice)
 
+    def showEvent(self, event: QShowEvent) -> None:
+        self._load_choices()
+        super().showEvent(event)
+
     def _load_choices(self) -> None:
         if self.session is None:
             return
@@ -153,7 +158,6 @@ class InvoiceEditorView(QWidget):
         self.service_combo.addItem("Custom line", None)
         for item in self.services.list(self.session, active_only=True):
             self.service_combo.addItem(f"{item.code} - {item.name}", item.id)
-        self.service_combo.currentIndexChanged.connect(self._apply_service)
 
     def _apply_service(self) -> None:
         if self.session is None:

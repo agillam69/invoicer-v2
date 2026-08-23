@@ -4,7 +4,7 @@ from hashlib import sha256
 from pathlib import Path
 
 from PySide6.QtCore import QUrl, Signal
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QDesktopServices, QShowEvent
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -98,6 +98,10 @@ class InvoiceListView(QWidget):
         layout.addLayout(actions)
         self._selected: Invoice | None = None
         self.refresh()
+
+    def showEvent(self, event: QShowEvent) -> None:
+        self.refresh()
+        super().showEvent(event)
 
     def _invoices(self) -> list[Invoice]:
         if self.session is None:
