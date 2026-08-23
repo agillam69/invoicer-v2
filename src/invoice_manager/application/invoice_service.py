@@ -227,9 +227,9 @@ class InvoiceService:
         *,
         invoice_date: date | None = None,
         due_date: date | None = None,
-        reference: str = "",
-        visible_notes: str = "",
-        internal_notes: str = "",
+        reference: str | None = None,
+        visible_notes: str | None = None,
+        internal_notes: str | None = None,
         business: BusinessProfile | None = None,
     ) -> Invoice:
         if invoice is None:
@@ -239,9 +239,9 @@ class InvoiceService:
                 items,
                 invoice_date=invoice_date,
                 due_date=due_date,
-                reference=reference,
-                visible_notes=visible_notes,
-                internal_notes=internal_notes,
+                reference=reference or "",
+                visible_notes=visible_notes or "",
+                internal_notes=internal_notes or "",
                 business=business,
             )
         self._assert_draft(invoice)
@@ -252,9 +252,12 @@ class InvoiceService:
             invoice.invoice_date = invoice_date
         if due_date is not None:
             invoice.due_date = due_date
-        invoice.reference = reference
-        invoice.visible_notes = visible_notes
-        invoice.internal_notes = internal_notes
+        if reference is not None:
+            invoice.reference = reference
+        if visible_notes is not None:
+            invoice.visible_notes = visible_notes
+        if internal_notes is not None:
+            invoice.internal_notes = internal_notes
         self._build_items(session, invoice, items)
         invoice.updated_at = utc_now()
         self.audit.record(

@@ -69,6 +69,55 @@ def test_clients_services_and_invoice_snapshots(session) -> None:
         invoices.save_draft(session, draft, client, [])
 
 
+def test_save_draft_omitted_fields_preserve_existing_values(session) -> None:
+    clients = ClientService()
+    invoices = InvoiceService()
+    client = clients.create(session, display_name="Notes Client")
+    business = BusinessProfile(
+        business_name="Notes Business",
+        gst_registered=False,
+        gst_rate=Decimal("0"),
+    )
+    session.add(business)
+    session.flush()
+    draft = invoices.create_draft(
+        session,
+        client,
+        [InvoiceItemData(description="Work", quantity=1, unit_price_cents=100)],
+        reference="REF-1",
+        visible_notes="Visible note",
+        internal_notes="Keep this note",
+        business=business,
+    )
+
+    invoices.save_draft(
+        session,
+        draft,
+        client,
+        [InvoiceItemData(description="Updated work", quantity=1, unit_price_cents=200)],
+        reference=draft.reference,
+        visible_notes=draft.visible_notes,
+    )
+
+    assert draft.reference == "REF-1"
+    assert draft.visible_notes == "Visible note"
+    assert draft.internal_notes == "Keep this note"
+    assert draft.business_name_snapshot == "Notes Business"
+
+    invoices.save_draft(
+        session,
+        draft,
+        client,
+        [InvoiceItemData(description="Updated work", quantity=1, unit_price_cents=200)],
+        reference="",
+        visible_notes="",
+        internal_notes="",
+    )
+    assert draft.reference == ""
+    assert draft.visible_notes == ""
+    assert draft.internal_notes == ""
+
+
 def test_client_duplicate_merge_delete_and_rollup(session) -> None:
     service = ClientService()
     first = service.create(session, display_name="Same Person", email="same@example.com")
