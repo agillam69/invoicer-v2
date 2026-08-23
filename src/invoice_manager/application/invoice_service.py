@@ -448,7 +448,9 @@ class InvoiceService:
             managed_relative_path = self.document_store.relative_path(invoice.canonical_number)
             external_path = None
         else:
-            InvoicePDF().generate(invoice, destination, currency_symbol=currency_symbol, draft=False)
+            InvoicePDF().generate(
+                invoice, destination, currency_symbol=currency_symbol, draft=False
+            )
             output = destination
             digest = sha256(output.read_bytes()).hexdigest()
             managed_relative_path = None
