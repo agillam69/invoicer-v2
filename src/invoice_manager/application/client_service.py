@@ -1,1 +1,229 @@
-"""Client service seam reserved for Phase 2."""
+from __future__ import annotations
+
+import builtins
+import csv
+import io
+from datetime import date
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from invoice_manager.application.audit import AuditService
+from invoice_manager.persistence.clock import utc_now
+from invoice_manager.persistence.models import Client, CreditNote, Invoice, Payment
+
+
+def _normalise(value: str) -> str:
+    return " ".join(value.casefold().split())
+
+
+class ClientService:
+    def __init__(self, audit: AuditService | None = None) -> None:
+        self.audit = audit or AuditService()
+
+    def list(
+        self, session: Session, search: str = "", *, active_only: bool = False
+    ) -> builtins.list[Client]:
+        stmt = select(Client).order_by(Client.display_name)
+        if active_only:
+            stmt = stmt.where(Client.active.is_(True))
+        if search.strip():
+            term = f"%{search.strip()}%"
+            stmt = stmt.where(
+                Client.display_name.ilike(term)
+                | Client.legal_name.ilike(term)
+                | Client.email.ilike(term)
+                | Client.phone.ilike(term)
+            )
+        return list(session.scalars(stmt).all())
+
+    def duplicates(
+        self,
+        session: Session,
+        *,
+        display_name: str,
+        email: str = "",
+        phone: str = "",
+        exclude_id: int | None = None,
+    ) -> builtins.list[Client]:
+        values = [v for v in (_normalise(display_name), _normalise(email), _normalise(phone)) if v]
+        if not values:
+            return []
+        result = []
+        for client in session.scalars(select(Client)).all():
+            if client.id == exclude_id:
+                continue
+            candidates = (
+                _normalise(client.display_name),
+                _normalise(client.email),
+                _normalise(client.phone),
+            )
+            if any(value in candidates for value in values):
+                result.append(client)
+        return result
+
+    def create(self, session: Session, *, display_name: str, **values: Any) -> Client:
+        if not display_name.strip():
+            raise ValueError("display name is required")
+        if self.duplicates(
+            session,
+            display_name=display_name,
+            email=str(values.get("email", "")),
+            phone=str(values.get("phone", "")),
+        ):
+            raise ValueError("possible duplicate client")
+        client = Client(display_name=display_name.strip(), **values)
+        session.add(client)
+        session.flush()
+        self.audit.record(
+            session,
+            action="create",
+            entity_type="client",
+            entity_id=client.id,
+            summary="Created client",
+            after={"display_name": client.display_name},
+        )
+        return client
+
+    def update(self, session: Session, client: Client, **values: Any) -> Client:
+        before = {"display_name": client.display_name, "email": client.email}
+        proposed_name = str(values.get("display_name", client.display_name))
+        proposed_email = str(values.get("email", client.email))
+        proposed_phone = str(values.get("phone", client.phone))
+        if self.duplicates(
+            session,
+            display_name=proposed_name,
+            email=proposed_email,
+            phone=proposed_phone,
+            exclude_id=client.id,
+        ):
+            raise ValueError("possible duplicate client")
+        for key, value in values.items():
+            if not hasattr(client, key) or key in {"id", "created_at", "updated_at"}:
+                raise ValueError(f"invalid client field: {key}")
+            setattr(client, key, value)
+        if not client.display_name.strip():
+            raise ValueError("display name is required")
+        client.updated_at = utc_now()
+        session.flush()
+        self.audit.record(
+            session,
+            action="update",
+            entity_type="client",
+            entity_id=client.id,
+            summary="Updated client",
+            before=before,
+            after={"display_name": client.display_name, "email": client.email},
+        )
+        return client
+
+    def deactivate(self, session: Session, client: Client) -> None:
+        client.active = False
+        self.audit.record(
+            session,
+            action="deactivate",
+            entity_type="client",
+            entity_id=client.id,
+            summary="Deactivated client",
+        )
+
+    def delete(self, session: Session, client: Client) -> None:
+        if session.scalar(select(Invoice.id).where(Invoice.client_id == client.id).limit(1)):
+            raise ValueError("client is referenced by invoices")
+        session.delete(client)
+        self.audit.record(
+            session,
+            action="delete",
+            entity_type="client",
+            entity_id=client.id,
+            summary="Deleted client",
+        )
+
+    def merge(self, session: Session, source: Client, target: Client) -> Client:
+        if source.id == target.id:
+            raise ValueError("cannot merge a client into itself")
+        if not target.active:
+            raise ValueError("merge target must be active")
+        invoices = list(
+            session.scalars(select(Invoice).where(Invoice.client_id == source.id)).all()
+        )
+        for invoice in invoices:
+            invoice.client_id = target.id
+        source.active = False
+        session.flush()
+        self.audit.record(
+            session,
+            action="merge",
+            entity_type="client",
+            entity_id=target.id,
+            summary=f"Merged client {source.id} into {target.id}",
+            before={"source_id": source.id, "invoice_ids": [i.id for i in invoices]},
+            after={"target_id": target.id},
+        )
+        return target
+
+    def rollup(self, session: Session, client: Client) -> dict[str, Any]:
+        invoices = list(
+            session.scalars(select(Invoice).where(Invoice.client_id == client.id)).all()
+        )
+        invoice_ids = [invoice.id for invoice in invoices]
+        payments = (
+            sum(
+                p.amount_cents
+                for p in session.scalars(
+                    select(Payment).where(Payment.invoice_id.in_(invoice_ids))
+                ).all()
+                if p.reversed_at is None
+            )
+            if invoice_ids
+            else 0
+        )
+        credits = (
+            sum(
+                c.total_cents
+                for c in session.scalars(
+                    select(CreditNote).where(CreditNote.invoice_id.in_(invoice_ids))
+                ).all()
+                if not c.voided
+            )
+            if invoice_ids
+            else 0
+        )
+        billed = sum(i.total_cents for i in invoices)
+        overdue = 0
+        today = date.today()
+        for invoice in invoices:
+            if invoice.due_date < today and invoice.status_override not in ("Cancelled", "Void"):
+                paid = sum(
+                    p.amount_cents
+                    for p in session.scalars(
+                        select(Payment).where(Payment.invoice_id == invoice.id)
+                    ).all()
+                    if p.reversed_at is None
+                )
+                credited = sum(
+                    c.total_cents
+                    for c in session.scalars(
+                        select(CreditNote).where(CreditNote.invoice_id == invoice.id)
+                    ).all()
+                    if not c.voided
+                )
+                overdue += max(invoice.total_cents - paid - credited, 0)
+        return {
+            "invoice_count": len(invoices),
+            "billed_cents": billed,
+            "paid_cents": payments,
+            "balance_cents": billed - payments - credits,
+            "overdue_cents": overdue,
+            "last_invoice_date": max((i.invoice_date for i in invoices), default=None),
+        }
+
+    def export_csv(self, session: Session, clients: builtins.list[Client] | None = None) -> str:
+        output = io.StringIO()
+        fields = ["id", "display_name", "legal_name", "email", "phone", "active"]
+        writer = csv.DictWriter(output, fieldnames=fields)
+        writer.writeheader()
+        for client in clients or self.list(session):
+            writer.writerow({field: getattr(client, field) for field in fields})
+        return output.getvalue()

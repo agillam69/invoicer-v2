@@ -16,9 +16,12 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from sqlalchemy.orm import Session
 
 from invoice_manager import __version__
 from invoice_manager.ui.app_log import AppLogDialog
+from invoice_manager.ui.clients import ClientsView
+from invoice_manager.ui.services import ServicesView
 
 DESTINATIONS = (
     "Dashboard",
@@ -38,6 +41,7 @@ class MainWindow(QMainWindow):
         user_display_name: str = "",
         data_location: Path | None = None,
         log_path: Path | None = None,
+        session: Session | None = None,
     ) -> None:
         super().__init__()
         self.setWindowTitle("Invoicer V2")
@@ -49,19 +53,26 @@ class MainWindow(QMainWindow):
             QListWidgetItem(destination, self.nav)
         self.pages = QStackedWidget()
         for destination in DESTINATIONS:
-            page = QWidget()
-            page_layout = QVBoxLayout(page)
-            title = QLabel(destination)
-            title.setStyleSheet("font-size: 24px; font-weight: 600;")
-            page_layout.addWidget(title)
-            if destination == "Dashboard":
-                text = "Your financial dashboard will arrive in a later phase."
+            page: QWidget
+            if destination == "Clients":
+                page = ClientsView(session)
+            elif destination == "Products & Services":
+                page = ServicesView(session)
             else:
-                text = f"{destination} will arrive in a later phase."
-            empty = QLabel(text)
-            empty.setWordWrap(True)
-            page_layout.addWidget(empty)
-            page_layout.addStretch()
+                page = QWidget()
+            if destination not in {"Clients", "Products & Services"}:
+                page_layout = QVBoxLayout(page)
+                title = QLabel(destination)
+                title.setStyleSheet("font-size: 24px; font-weight: 600;")
+                page_layout.addWidget(title)
+                if destination == "Dashboard":
+                    text = "Your financial dashboard will arrive in a later phase."
+                else:
+                    text = f"{destination} will arrive in a later phase."
+                empty = QLabel(text)
+                empty.setWordWrap(True)
+                page_layout.addWidget(empty)
+                page_layout.addStretch()
             self.pages.addWidget(page)
         self.nav.currentRowChanged.connect(self.pages.setCurrentIndex)
         self.nav.setCurrentRow(0)
