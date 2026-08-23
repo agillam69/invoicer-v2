@@ -58,11 +58,7 @@ def calculate_line(
     rate = _decimal(gst_rate)
     if not 0 <= rate <= 1:
         raise MoneyError("GST rate must be a decimal fraction between 0 and 1")
-    gst = (
-        int((Decimal(subtotal) * rate).quantize(Decimal("1"), ROUND_HALF_UP))
-        if taxable
-        else 0
-    )
+    gst = int((Decimal(subtotal) * rate).quantize(Decimal("1"), ROUND_HALF_UP)) if taxable else 0
     return LineCalculation(gross, discount_cents, subtotal, gst, subtotal + gst)
 
 

@@ -137,7 +137,10 @@ def test_catalogue_inheritance_allows_false_and_zero(session) -> None:
 
 
 def test_external_gst_split_and_terms_due_date(session) -> None:
-    client = ClientService().create(session, display_name="External",)
+    client = ClientService().create(
+        session,
+        display_name="External",
+    )
     client.default_terms_days = 30
     business = BusinessProfile(gst_registered=True, gst_rate=Decimal("0.1"))
     session.add(business)
@@ -158,15 +161,16 @@ def test_external_gst_split_and_terms_due_date(session) -> None:
 def test_reissue_renders_document_without_reserving_number(session, tmp_path) -> None:
     client = ClientService().create(session, display_name="Reissue")
     service = InvoiceService()
-    invoice = service.create_draft(
-        session, client, [InvoiceItemData("Work", 1, 1000)]
-    )
+    invoice = service.create_draft(session, client, [InvoiceItemData("Work", 1, 1000)])
     service.issue(session, invoice)
     before = session.scalar(
         select(NumberSequence.next_value).where(NumberSequence.sequence_type == "invoice")
     )
     path = tmp_path / "reissued.pdf"
-    assert service.reissue(session, invoice, "Requested copy", destination=path) == invoice.canonical_number
+    assert (
+        service.reissue(session, invoice, "Requested copy", destination=path)
+        == invoice.canonical_number
+    )
     assert path.exists()
     assert (
         session.scalar(
@@ -195,12 +199,15 @@ def test_draft_delete_void_duplicate_and_credit_gst(session) -> None:
     duplicate = invoices.duplicate_as_draft(session, invoice)
     assert duplicate.canonical_number is None
     assert len(duplicate.items) == 1
-    assert invoices.create_credit_note(
-        session,
-        invoice,
-        [InvoiceItemData("Taxed", 1, 1000, taxable=True, gst_rate=Decimal("0.1"))],
-        "Refund",
-    ).gst_cents == 100
+    assert (
+        invoices.create_credit_note(
+            session,
+            invoice,
+            [InvoiceItemData("Taxed", 1, 1000, taxable=True, gst_rate=Decimal("0.1"))],
+            "Refund",
+        ).gst_cents
+        == 100
+    )
     invoices.void(session, invoice, "Duplicate source")
     assert invoice.status_override == "Void"
 
@@ -228,9 +235,7 @@ def test_rollup_tracks_paid_balance_and_overdue(session) -> None:
 
 def test_deactivated_service_stays_valid_on_invoice_snapshot(session) -> None:
     client = ClientService().create(session, display_name="Catalogue")
-    catalogue = ServiceItemService().create(
-        session, code="KEEP", name="Keep", unit_price_cents=100
-    )
+    catalogue = ServiceItemService().create(session, code="KEEP", name="Keep", unit_price_cents=100)
     invoice = InvoiceService().create_draft(
         session,
         client,

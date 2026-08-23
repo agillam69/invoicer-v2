@@ -60,9 +60,7 @@ def test_invoice_pdf_gst_columns_follow_registration_snapshot(session, tmp_path)
     taxable_text = "\n".join(page.extract_text() or "" for page in PdfReader(taxable_path).pages)
     assert "TAX INVOICE" in taxable_text
     assert "GST" in taxable_text
-    regular = InvoiceService().create_draft(
-        session, client, [InvoiceItemData("Regular", 1, 1000)]
-    )
+    regular = InvoiceService().create_draft(session, client, [InvoiceItemData("Regular", 1, 1000)])
     regular_path = InvoicePDF().generate(regular, tmp_path / "regular.pdf")
     regular_text = "\n".join(page.extract_text() or "" for page in PdfReader(regular_path).pages)
     assert "TAX INVOICE" not in regular_text

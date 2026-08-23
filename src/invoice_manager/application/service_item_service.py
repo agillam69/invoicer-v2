@@ -43,7 +43,11 @@ class ServiceItemService:
             raise ValueError("service name is required")
         if not isinstance(unit_price_cents, int) or unit_price_cents < 0:
             raise ValueError("unit price cannot be negative")
-        if not isinstance(code, str) or not isinstance(description, str) or not isinstance(unit, str):
+        if (
+            not isinstance(code, str)
+            or not isinstance(description, str)
+            or not isinstance(unit, str)
+        ):
             raise ValueError("service text fields must be strings")
         if not unit.strip():
             raise ValueError("service unit is required")

@@ -42,7 +42,17 @@ class InvoiceListView(QWidget):
         self.search.textChanged.connect(self.refresh)
         self.status_filter = QComboBox()
         self.status_filter.addItems(
-            ["All", "Draft", "Issued", "Part Paid", "Paid", "Overdue", "Credited", "Cancelled", "Void"]
+            [
+                "All",
+                "Draft",
+                "Issued",
+                "Part Paid",
+                "Paid",
+                "Overdue",
+                "Credited",
+                "Cancelled",
+                "Void",
+            ]
         )
         self.status_filter.currentTextChanged.connect(self.refresh)
         self.sort = QComboBox()

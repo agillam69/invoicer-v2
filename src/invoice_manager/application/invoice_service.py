@@ -446,9 +446,7 @@ class InvoiceService:
             if not 0 <= rate <= 1:
                 raise ValueError("GST rate must be a decimal fraction between 0 and 1")
             subtotal_cents = int(
-                (Decimal(total_cents) / (Decimal("1") + rate)).quantize(
-                    Decimal("1"), ROUND_HALF_UP
-                )
+                (Decimal(total_cents) / (Decimal("1") + rate)).quantize(Decimal("1"), ROUND_HALF_UP)
             )
             gst_cents = total_cents - subtotal_cents
         else:
