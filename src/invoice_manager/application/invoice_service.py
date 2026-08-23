@@ -8,13 +8,14 @@ from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from hashlib import sha256
 from pathlib import Path
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from invoice_manager.application.audit import AuditService
 from invoice_manager.application.numbering import NumberingService
+from invoice_manager.config import AppPaths
+from invoice_manager.documents.invoice_documents import InvoiceDocumentStore
 from invoice_manager.documents.invoice_pdf import InvoicePDF
 from invoice_manager.domain.invoice_calculations import calculate_invoice, calculate_line
 from invoice_manager.domain.statuses import InvoiceStatus, derive_status
@@ -75,9 +76,13 @@ class InvoiceService:
         self,
         numbering: NumberingService | None = None,
         audit: AuditService | None = None,
+        *,
+        paths: AppPaths | None = None,
+        document_store: InvoiceDocumentStore | None = None,
     ) -> None:
         self.numbering = numbering or NumberingService()
         self.audit = audit or AuditService()
+        self.document_store = document_store or InvoiceDocumentStore(paths or AppPaths.resolve())
 
     def _assert_draft(self, invoice: Invoice) -> None:
         if invoice.issued_at is not None or invoice.canonical_number is not None:
@@ -210,23 +215,46 @@ class InvoiceService:
         self._build_items(session, invoice, items)
         return invoice
 
+    def render_draft_preview(self, invoice: Invoice) -> Path:
+        return self.document_store.render_draft_preview(invoice)
+
     def save_draft(
         self,
         session: Session,
         invoice: Invoice | None,
         client: Client,
         items: Iterable[InvoiceItemData],
-        **values: Any,
+        *,
+        invoice_date: date | None = None,
+        due_date: date | None = None,
+        reference: str = "",
+        visible_notes: str = "",
+        internal_notes: str = "",
+        business: BusinessProfile | None = None,
     ) -> Invoice:
         if invoice is None:
-            return self.create_draft(session, client, items, **values)
+            return self.create_draft(
+                session,
+                client,
+                items,
+                invoice_date=invoice_date,
+                due_date=due_date,
+                reference=reference,
+                visible_notes=visible_notes,
+                internal_notes=internal_notes,
+                business=business,
+            )
         self._assert_draft(invoice)
         before = {"total_cents": invoice.total_cents, "reference": invoice.reference}
         _snapshot_client(invoice, client)
-        _snapshot_business(invoice, values.pop("business", None))
-        for key in ("invoice_date", "due_date", "reference", "visible_notes", "internal_notes"):
-            if key in values:
-                setattr(invoice, key, values[key])
+        _snapshot_business(invoice, business)
+        if invoice_date is not None:
+            invoice.invoice_date = invoice_date
+        if due_date is not None:
+            invoice.due_date = due_date
+        invoice.reference = reference
+        invoice.visible_notes = visible_notes
+        invoice.internal_notes = internal_notes
         self._build_items(session, invoice, items)
         invoice.updated_at = utc_now()
         self.audit.record(
@@ -259,6 +287,19 @@ class InvoiceService:
         invoice.issued_at = utc_now()
         invoice.status_override = None
         invoice.updated_at = invoice.issued_at
+        output, digest = self.document_store.render(invoice)
+        session.add(
+            Document(
+                entity_type="invoice",
+                entity_id=invoice.id,
+                document_type="invoice_pdf",
+                managed_relative_path=self.document_store.relative_path(invoice.canonical_number),
+                original_filename=output.name,
+                sha256=digest,
+                mime_type="application/pdf",
+            )
+        )
+        session.flush()
         self.audit.record(
             session,
             action="issue",
@@ -402,16 +443,25 @@ class InvoiceService:
             raise ValueError("only issued invoices can be reissued")
         if not reason.strip():
             raise ValueError("reason is required")
-        output = destination or Path("documents") / "invoices" / f"{invoice.canonical_number}.pdf"
-        InvoicePDF().generate(invoice, output, currency_symbol=currency_symbol, draft=False)
-        digest = sha256(output.read_bytes()).hexdigest()
+        if destination is None:
+            output, digest = self.document_store.render(invoice)
+            managed_relative_path = self.document_store.relative_path(invoice.canonical_number)
+            external_path = None
+        else:
+            InvoicePDF().generate(invoice, destination, currency_symbol=currency_symbol, draft=False)
+            output = destination
+            digest = sha256(output.read_bytes()).hexdigest()
+            managed_relative_path = None
+            external_path = str(output)
         document = Document(
             entity_type="invoice",
             entity_id=invoice.id,
             document_type="invoice_pdf",
-            managed_relative_path=str(output),
+            managed_relative_path=managed_relative_path,
+            external_path=external_path,
             original_filename=output.name,
             sha256=digest,
+            mime_type="application/pdf",
         )
         session.add(document)
         session.flush()
@@ -509,11 +559,13 @@ class InvoiceService:
                 raise ValueError("item price is required")
         calculations = []
         for item in values:
-            assert item.unit_price_cents is not None
+            unit_price_cents = item.unit_price_cents
+            if unit_price_cents is None:
+                raise ValueError("item price is required")
             calculations.append(
                 calculate_line(
                     item.quantity,
-                    item.unit_price_cents,
+                    unit_price_cents,
                     discount_type=item.discount_type,
                     discount_value=item.discount_value,
                     taxable=item.taxable if item.taxable is not None else False,
@@ -543,7 +595,7 @@ class InvoiceService:
                 position=index,
                 description=item.description,
                 quantity_decimal=Decimal(str(item.quantity)),
-                unit_price_cents=item.unit_price_cents,
+                unit_price_cents=unit_price_cents,
                 taxable=item.taxable,
                 gst_cents=calculation.gst_cents,
                 total_cents=calculation.total_cents,

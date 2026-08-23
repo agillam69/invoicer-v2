@@ -79,7 +79,7 @@ class InvoicePDF:
         business = [
             Paragraph(f"<b>{invoice.business_name_snapshot or 'Business'}</b>", body),
             Paragraph(f"ABN: {invoice.business_abn_snapshot}", small),
-            Paragraph(invoice.business_address_snapshot.replace("\n", "<br/>"), small),
+            Paragraph((invoice.business_address_snapshot or "").replace("\n", "<br/>"), small),
             Paragraph(
                 f"{invoice.business_phone_snapshot}<br/>{invoice.business_email_snapshot}",
                 small,
@@ -104,7 +104,7 @@ class InvoicePDF:
                     f"{invoice.client_name_snapshot}<br/>"
                     f"ABN: {invoice.client_abn_snapshot}<br/>"
                     f"{invoice.client_contact_snapshot}<br/>"
-                    f"{invoice.client_address_snapshot.replace(chr(10), '<br/>')}"
+                    f"{(invoice.client_address_snapshot or '').replace(chr(10), '<br/>')}"
                 ),
                 small,
             )
