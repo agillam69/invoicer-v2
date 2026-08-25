@@ -6,6 +6,7 @@ import pytest
 from invoice_manager.application.client_service import ClientService
 from invoice_manager.application.invoice_service import InvoiceItemData, InvoiceService
 from invoice_manager.config import AppPaths
+from invoice_manager.persistence.models import Invoice
 from invoice_manager.ui.invoice_editor import InvoiceEditorView
 from invoice_manager.ui.invoice_list import InvoiceListView
 
@@ -47,8 +48,55 @@ def test_editor_issue_assigns_one_number(qtbot, session, monkeypatch, tmp_path) 
         lambda *args: 16384,
     )
     editor._issue()
-    assert editor.invoice is not None
-    assert editor.invoice.canonical_number == "INV-0001"
+    assert editor.invoice is None
+    issued = session.query(Invoice).one()
+    assert issued.canonical_number == "INV-0001"
+
+
+@pytest.mark.gui
+def test_editor_can_issue_second_invoice_without_restart(
+    qtbot, session, monkeypatch, tmp_path
+) -> None:
+    client = ClientService().create(session, display_name="Two invoices")
+    paths = AppPaths.resolve(tmp_path)
+    editor = InvoiceEditorView(session, paths=paths)
+    qtbot.addWidget(editor)
+    editor.client_combo.setCurrentIndex(editor.client_combo.findData(client.id))
+    editor.description_input.setText("First")
+    editor.price_input.setText("100")
+    editor.add_line_button.click()
+    editor._save()
+    monkeypatch.setattr(
+        "invoice_manager.ui.invoice_editor.QMessageBox.question",
+        lambda *args: 16384,
+    )
+    editor._issue()
+    assert editor.invoice is None
+
+    editor.description_input.setText("Second")
+    editor.price_input.setText("200")
+    editor.add_line_button.click()
+    editor._issue()
+    numbers = [invoice.canonical_number for invoice in session.query(Invoice).all()]
+    assert numbers == ["INV-0001", "INV-0002"]
+
+
+@pytest.mark.gui
+def test_editor_bad_date_is_visible_error(qtbot, session, monkeypatch) -> None:
+    client = ClientService().create(session, display_name="Bad date")
+    editor = InvoiceEditorView(session)
+    qtbot.addWidget(editor)
+    editor.client_combo.setCurrentIndex(editor.client_combo.findData(client.id))
+    editor.description_input.setText("Work")
+    editor.price_input.setText("100")
+    editor.add_line_button.click()
+    editor.invoice_date_input.setText("not a date")
+    monkeypatch.setattr(
+        "invoice_manager.ui.invoice_editor.QDesktopServices.openUrl",
+        lambda *_args: True,
+    )
+    editor._preview()
+    assert "DD/MM/YYYY" in editor.error_label.text()
 
 
 @pytest.mark.gui

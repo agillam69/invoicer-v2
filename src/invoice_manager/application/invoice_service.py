@@ -231,6 +231,7 @@ class InvoiceService:
         visible_notes: str | None = None,
         internal_notes: str | None = None,
         business: BusinessProfile | None = None,
+        user_id: int | None = None,
     ) -> Invoice:
         if invoice is None:
             return self.create_draft(
@@ -243,6 +244,7 @@ class InvoiceService:
                 visible_notes=visible_notes or "",
                 internal_notes=internal_notes or "",
                 business=business,
+                created_by=user_id,
             )
         self._assert_draft(invoice)
         before = {"total_cents": invoice.total_cents, "reference": invoice.reference}
@@ -268,10 +270,13 @@ class InvoiceService:
             summary="Updated invoice draft",
             before=before,
             after={"total_cents": invoice.total_cents, "reference": invoice.reference},
+            user_id=user_id,
         )
         return invoice
 
-    def delete_draft(self, session: Session, invoice: Invoice) -> None:
+    def delete_draft(
+        self, session: Session, invoice: Invoice, *, user_id: int | None = None
+    ) -> None:
         self._assert_draft(invoice)
         session.delete(invoice)
         self.audit.record(
@@ -280,6 +285,7 @@ class InvoiceService:
             entity_type="invoice",
             entity_id=invoice.id,
             summary="Deleted invoice draft",
+            user_id=user_id,
         )
 
     def issue(self, session: Session, invoice: Invoice, *, user_id: int | None = None) -> Invoice:
@@ -336,6 +342,7 @@ class InvoiceService:
     ) -> InvoiceStatus:
         return derive_status(
             total_cents=invoice.total_cents,
+            issued=invoice.issued_at is not None,
             payment_cents=self._payments(session, invoice.id),
             credit_cents=self._credits(session, invoice.id),
             due_date=invoice.due_date,
