@@ -326,6 +326,37 @@ def test_draft_delete_void_duplicate_and_credit_gst(session) -> None:
     assert invoice.status_override == "Void"
 
 
+def test_deleted_invoice_id_is_not_reused_for_audit_history(session) -> None:
+    client = ClientService().create(session, display_name="Audit IDs")
+    service = InvoiceService()
+    first = service.create_draft(session, client, [InvoiceItemData("First", 1, 100)])
+    first_id = first.id
+    service.delete_draft(session, first)
+    session.flush()
+
+    second = service.create_draft(session, client, [InvoiceItemData("Second", 1, 100)])
+    assert second.id > first_id
+    service.save_draft(
+        session,
+        second,
+        client,
+        [InvoiceItemData("Second", 1, 100)],
+    )
+    session.flush()
+    history = service.history(session, second)
+    assert history
+    assert all(event.entity_id == second.id for event in history)
+    old_events = list(
+        session.scalars(
+            select(AuditEvent).where(
+                AuditEvent.entity_type == "invoice",
+                AuditEvent.entity_id == first_id,
+            )
+        )
+    )
+    assert old_events
+
+
 def test_rollup_tracks_paid_balance_and_overdue(session) -> None:
     client = ClientService().create(session, display_name="Rollup")
     invoice = Invoice(

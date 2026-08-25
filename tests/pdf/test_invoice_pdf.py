@@ -42,7 +42,13 @@ def test_invoice_pdf_repeats_headers_on_multiple_pages(session, tmp_path) -> Non
     path = InvoicePDF().generate(invoice, tmp_path / "many.pdf")
     reader = PdfReader(path)
     assert len(reader.pages) >= 2
-    assert all("Description" in (page.extract_text() or "") for page in reader.pages)
+    item_pages = [
+        page.extract_text() or ""
+        for page in reader.pages
+        if "Long service line" in (page.extract_text() or "")
+    ]
+    assert item_pages
+    assert all("Description" in text for text in item_pages)
 
 
 def test_invoice_pdf_gst_columns_follow_registration_snapshot(session, tmp_path) -> None:

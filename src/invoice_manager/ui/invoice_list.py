@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from hashlib import sha256
 from pathlib import Path
 
@@ -38,10 +39,12 @@ class InvoiceListView(QWidget):
         *,
         invoice_service: InvoiceService | None = None,
         paths: AppPaths | None = None,
+        user_id: int | None = None,
     ) -> None:
         super().__init__()
         self.session = session
         self.paths = paths or AppPaths.resolve()
+        self.user_id = user_id
         self.files = FileStore(self.paths.root)
         self.service = invoice_service or InvoiceService(paths=self.paths)
         self.search = QLineEdit()
@@ -72,17 +75,20 @@ class InvoiceListView(QWidget):
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.cellClicked.connect(self._select)
         self.history_button = QPushButton("History")
-        self.open_button = QPushButton("Open / reveal PDF")
+        self.open_button = QPushButton("Open PDF")
+        self.reveal_button = QPushButton("Reveal PDF")
         self.relink_button = QPushButton("Relink PDF")
         self.export_button = QPushButton("Export / copy CSV")
         self.history_button.clicked.connect(self._history)
         self.open_button.clicked.connect(self._open_pdf)
+        self.reveal_button.clicked.connect(self._reveal_pdf)
         self.relink_button.clicked.connect(self._relink)
         self.export_button.clicked.connect(self._copy_export)
         actions = QHBoxLayout()
         for button in (
             self.history_button,
             self.open_button,
+            self.reveal_button,
             self.relink_button,
             self.export_button,
         ):
@@ -178,7 +184,12 @@ class InvoiceListView(QWidget):
         document = self._document()
         if self.session is None or document is None:
             return
-        path, _ = QFileDialog.getOpenFileName(self, "Relink invoice PDF", "", "PDF files (*.pdf)")
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Relink invoice PDF",
+            str(self.paths.documents / "invoices"),
+            "PDF files (*.pdf)",
+        )
         if path:
             chosen = Path(path).resolve()
             document.original_filename = chosen.name
@@ -192,6 +203,28 @@ class InvoiceListView(QWidget):
                 document.external_path = str(chosen)
             self.session.commit()
 
+    def _pdf_path(self) -> Path | None:
+        document = self._document()
+        if document is None:
+            return None
+        if document.external_path:
+            path = Path(document.external_path)
+        elif document.managed_relative_path:
+            try:
+                path = self.files.managed_path(document.managed_relative_path)
+            except ValueError:
+                return None
+        else:
+            return None
+        return path if path.exists() else None
+
+    def _reveal_pdf(self) -> None:
+        path = self._pdf_path()
+        if path is None:
+            QMessageBox.warning(self, "Invoice", "The linked PDF is missing")
+            return
+        subprocess.Popen(["explorer.exe", f"/select,{path}"])
+
     def _history(self) -> None:
         if self.session is None or self._selected is None:
             return
@@ -204,6 +237,11 @@ class InvoiceListView(QWidget):
             return
         content = self.service.export_csv(self.session, self._invoices())
         QApplication.clipboard().setText(content)
-        path, _ = QFileDialog.getSaveFileName(self, "Export invoices", "", "CSV files (*.csv)")
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export invoices",
+            str(self.paths.exports / "invoices.csv"),
+            "CSV files (*.csv)",
+        )
         if path:
             Path(path).write_text(content, encoding="utf-8", newline="")

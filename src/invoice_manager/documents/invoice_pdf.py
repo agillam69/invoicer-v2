@@ -76,14 +76,26 @@ class InvoicePDF:
             title=f"Invoice {invoice.canonical_number or 'DRAFT'}",
         )
         story: list[object] = []
+        business_name = invoice.business_name_snapshot or ""
+        business_abn = invoice.business_abn_snapshot or ""
+        business_address = (invoice.business_address_snapshot or "").replace("\n", "<br/>")
+        business_contact = "<br/>".join(
+            value
+            for value in (
+                invoice.business_phone_snapshot or "",
+                invoice.business_email_snapshot or "",
+            )
+            if value
+        )
+        client_name = invoice.client_name_snapshot or ""
+        client_abn = invoice.client_abn_snapshot or ""
+        client_contact = invoice.client_contact_snapshot or ""
+        client_address = (invoice.client_address_snapshot or "").replace("\n", "<br/>")
         business = [
-            Paragraph(f"<b>{invoice.business_name_snapshot or 'Business'}</b>", body),
-            Paragraph(f"ABN: {invoice.business_abn_snapshot}", small),
-            Paragraph((invoice.business_address_snapshot or "").replace("\n", "<br/>"), small),
-            Paragraph(
-                f"{invoice.business_phone_snapshot}<br/>{invoice.business_email_snapshot}",
-                small,
-            ),
+            Paragraph(f"<b>{business_name}</b>", body),
+            Paragraph(f"ABN: {business_abn}" if business_abn else "", small),
+            Paragraph(business_address, small),
+            Paragraph(business_contact, small),
         ]
         metadata = [
             Paragraph(
@@ -101,10 +113,10 @@ class InvoicePDF:
         story.append(
             Paragraph(
                 (
-                    f"{invoice.client_name_snapshot}<br/>"
-                    f"ABN: {invoice.client_abn_snapshot}<br/>"
-                    f"{invoice.client_contact_snapshot}<br/>"
-                    f"{(invoice.client_address_snapshot or '').replace(chr(10), '<br/>')}"
+                    f"{client_name}<br/>"
+                    f"{f'ABN: {client_abn}<br/>' if client_abn else ''}"
+                    f"{client_contact}<br/>"
+                    f"{client_address}"
                 ),
                 small,
             )
