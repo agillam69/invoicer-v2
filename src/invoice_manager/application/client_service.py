@@ -3,8 +3,8 @@ from __future__ import annotations
 import builtins
 import csv
 import io
+from dataclasses import dataclass
 from datetime import date
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -16,6 +16,16 @@ from invoice_manager.persistence.models import Client, CreditNote, Invoice, Paym
 
 def _normalise(value: str) -> str:
     return " ".join(value.casefold().split())
+
+
+@dataclass(frozen=True)
+class ClientRollup:
+    invoice_count: int
+    billed_cents: int
+    paid_cents: int
+    balance_cents: int
+    overdue_cents: int
+    last_invoice_date: date | None
 
 
 class ClientService:
@@ -228,9 +238,14 @@ class ClientService:
         )
         return target
 
-    def rollup(self, session: Session, client: Client) -> dict[str, Any]:
+    def rollup(self, session: Session, client: Client) -> ClientRollup:
         invoices = list(
-            session.scalars(select(Invoice).where(Invoice.client_id == client.id)).all()
+            invoice
+            for invoice in session.scalars(
+                select(Invoice).where(Invoice.client_id == client.id)
+            ).all()
+            if invoice.issued_at is not None
+            and invoice.status_override not in ("Cancelled", "Void")
         )
         invoice_ids = [invoice.id for invoice in invoices]
         payments = (
@@ -275,14 +290,14 @@ class ClientService:
                     if not c.voided
                 )
                 overdue += max(invoice.total_cents - paid - credited, 0)
-        return {
-            "invoice_count": len(invoices),
-            "billed_cents": billed,
-            "paid_cents": payments,
-            "balance_cents": billed - payments - credits,
-            "overdue_cents": overdue,
-            "last_invoice_date": max((i.invoice_date for i in invoices), default=None),
-        }
+        return ClientRollup(
+            invoice_count=len(invoices),
+            billed_cents=billed,
+            paid_cents=payments,
+            balance_cents=billed - payments - credits,
+            overdue_cents=overdue,
+            last_invoice_date=max((i.invoice_date for i in invoices), default=None),
+        )
 
     def export_csv(self, session: Session, clients: builtins.list[Client] | None = None) -> str:
         output = io.StringIO()

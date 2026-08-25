@@ -105,14 +105,14 @@ class ClientsView(QWidget):
                 client.contact_name,
                 client.phone,
                 client.email,
-                str(rollup["invoice_count"]),
-                format_aud(rollup["billed_cents"]),
-                format_aud(rollup["paid_cents"]),
-                format_aud(rollup["balance_cents"]),
-                format_aud(rollup["overdue_cents"]),
+                str(rollup.invoice_count),
+                format_aud(rollup.billed_cents),
+                format_aud(rollup.paid_cents),
+                format_aud(rollup.balance_cents),
+                format_aud(rollup.overdue_cents),
                 (
-                    rollup["last_invoice_date"].strftime("%d/%m/%Y")
-                    if rollup["last_invoice_date"] is not None
+                    rollup.last_invoice_date.strftime("%d/%m/%Y")
+                    if rollup.last_invoice_date is not None
                     else ""
                 ),
             ]

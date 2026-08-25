@@ -9,6 +9,7 @@ from invoice_manager.application.client_service import ClientService
 from invoice_manager.application.invoice_service import InvoiceItemData, InvoiceService
 from invoice_manager.application.service_item_service import ServiceItemService
 from invoice_manager.config import AppPaths
+from invoice_manager.persistence.clock import utc_now
 from invoice_manager.persistence.models import (
     AuditEvent,
     BusinessProfile,
@@ -131,13 +132,14 @@ def test_client_duplicate_merge_delete_and_rollup(session) -> None:
         total_cents=100,
         subtotal_cents=100,
         client_name_snapshot=first.display_name,
+        issued_at=utc_now(),
     )
     session.add(invoice)
     session.flush()
     service.merge(session, first, second)
     assert invoice.client_id == second.id
     assert first.active is False
-    assert service.rollup(session, second)["billed_cents"] == 100
+    assert service.rollup(session, second).billed_cents == 100
     with pytest.raises(ValueError, match="referenced"):
         service.delete(session, second)
     assert session.scalar(select(AuditEvent).where(AuditEvent.entity_type == "client")) is not None
@@ -366,16 +368,62 @@ def test_rollup_tracks_paid_balance_and_overdue(session) -> None:
         client_name_snapshot=client.display_name,
         subtotal_cents=1000,
         total_cents=1000,
+        issued_at=utc_now(),
     )
     session.add(invoice)
     session.flush()
     session.add(Payment(invoice_id=invoice.id, amount_cents=400))
     session.flush()
     rollup = ClientService().rollup(session, client)
-    assert rollup["billed_cents"] == 1000
-    assert rollup["paid_cents"] == 400
-    assert rollup["balance_cents"] == 600
-    assert rollup["overdue_cents"] == 600
+    assert rollup.billed_cents == 1000
+    assert rollup.paid_cents == 400
+    assert rollup.balance_cents == 600
+    assert rollup.overdue_cents == 600
+
+
+def test_rollup_excludes_drafts_and_cancelled_or_voided_invoices(session) -> None:
+    clients = ClientService()
+    invoices = InvoiceService()
+    client = clients.create(session, display_name="Issued Only")
+    issued_date = date.today() - timedelta(days=5)
+    issued = Invoice(
+        invoice_date=issued_date,
+        due_date=date.today() - timedelta(days=1),
+        client_id=client.id,
+        client_name_snapshot=client.display_name,
+        subtotal_cents=1000,
+        total_cents=1000,
+        issued_at=utc_now(),
+    )
+    draft = Invoice(
+        invoice_date=date.today(),
+        due_date=date.today(),
+        client_id=client.id,
+        client_name_snapshot=client.display_name,
+        subtotal_cents=2000,
+        total_cents=2000,
+    )
+    voided = Invoice(
+        invoice_date=date.today(),
+        due_date=date.today() - timedelta(days=1),
+        client_id=client.id,
+        client_name_snapshot=client.display_name,
+        subtotal_cents=3000,
+        total_cents=3000,
+        issued_at=utc_now(),
+    )
+    session.add_all([issued, draft, voided])
+    session.flush()
+    invoices.void(session, voided, "entered in error")
+
+    rollup = clients.rollup(session, client)
+
+    assert rollup.invoice_count == 1
+    assert rollup.billed_cents == 1000
+    assert rollup.paid_cents == 0
+    assert rollup.balance_cents == 1000
+    assert rollup.overdue_cents == 1000
+    assert rollup.last_invoice_date == issued_date
 
 
 def test_deactivated_service_stays_valid_on_invoice_snapshot(session) -> None:

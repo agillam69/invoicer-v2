@@ -41,7 +41,7 @@ def test_clients_rollup_columns_and_refresh(qtbot, session, tmp_path) -> None:
         "Overdue",
         "Last invoice date",
     ]
-    assert view.table.item(0, 5).text() == "$10.00"
+    assert view.table.item(0, 5).text() == "$0.00"
     InvoiceService(paths=paths).issue(session, invoice)
     view.show()
     qtbot.wait(10)
