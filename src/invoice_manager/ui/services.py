@@ -22,11 +22,16 @@ from invoice_manager.persistence.models import ServiceItem
 
 class ServicesView(QWidget):
     def __init__(
-        self, session: Session | None = None, service: ServiceItemService | None = None
+        self,
+        session: Session | None = None,
+        service: ServiceItemService | None = None,
+        *,
+        user_id: int | None = None,
     ) -> None:
         super().__init__()
         self.session = session
         self.service = service or ServiceItemService()
+        self.user_id = user_id
         self.search = QLineEdit()
         self.search.setPlaceholderText("Search services")
         self.search.textChanged.connect(self.refresh)
@@ -116,6 +121,7 @@ class ServicesView(QWidget):
                 unit_price_cents=int(self.unit_price.text()),
                 taxable=self.taxable.isChecked(),
                 category_id=int(self.category_id.text()) if self.category_id.text() else None,
+                user_id=self.user_id,
             )
             self.session.commit()
             self.refresh()
@@ -136,6 +142,7 @@ class ServicesView(QWidget):
                 unit_price_cents=int(self.unit_price.text()),
                 taxable=self.taxable.isChecked(),
                 category_id=int(self.category_id.text()) if self.category_id.text() else None,
+                user_id=self.user_id,
             )
             self.session.commit()
             self.refresh()
@@ -145,6 +152,11 @@ class ServicesView(QWidget):
     def _toggle(self) -> None:
         if self.session is None or self._selected is None:
             return
-        self.service.set_active(self.session, self._selected, not self._selected.active)
+        self.service.set_active(
+            self.session,
+            self._selected,
+            not self._selected.active,
+            user_id=self.user_id,
+        )
         self.session.commit()
         self.refresh()

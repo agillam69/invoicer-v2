@@ -63,17 +63,43 @@ class ClientService:
                 result.append(client)
         return result
 
-    def create(self, session: Session, *, display_name: str, **values: Any) -> Client:
+    def create(
+        self,
+        session: Session,
+        *,
+        display_name: str,
+        legal_name: str = "",
+        abn: str = "",
+        contact_name: str = "",
+        email: str = "",
+        phone: str = "",
+        billing_address: str = "",
+        default_terms_days: int = 0,
+        default_notes: str = "",
+        active: bool = True,
+        user_id: int | None = None,
+    ) -> Client:
         if not display_name.strip():
             raise ValueError("display name is required")
         if self.duplicates(
             session,
             display_name=display_name,
-            email=str(values.get("email", "")),
-            phone=str(values.get("phone", "")),
+            email=email,
+            phone=phone,
         ):
             raise ValueError("possible duplicate client")
-        client = Client(display_name=display_name.strip(), **values)
+        client = Client(
+            display_name=display_name.strip(),
+            legal_name=legal_name,
+            abn=abn,
+            contact_name=contact_name,
+            email=email,
+            phone=phone,
+            billing_address=billing_address,
+            default_terms_days=default_terms_days,
+            default_notes=default_notes,
+            active=active,
+        )
         session.add(client)
         session.flush()
         self.audit.record(
@@ -82,15 +108,32 @@ class ClientService:
             entity_type="client",
             entity_id=client.id,
             summary="Created client",
+            user_id=user_id,
             after={"display_name": client.display_name},
         )
         return client
 
-    def update(self, session: Session, client: Client, **values: Any) -> Client:
+    def update(
+        self,
+        session: Session,
+        client: Client,
+        *,
+        display_name: str | None = None,
+        legal_name: str | None = None,
+        abn: str | None = None,
+        contact_name: str | None = None,
+        email: str | None = None,
+        phone: str | None = None,
+        billing_address: str | None = None,
+        default_terms_days: int | None = None,
+        default_notes: str | None = None,
+        active: bool | None = None,
+        user_id: int | None = None,
+    ) -> Client:
         before = {"display_name": client.display_name, "email": client.email}
-        proposed_name = str(values.get("display_name", client.display_name))
-        proposed_email = str(values.get("email", client.email))
-        proposed_phone = str(values.get("phone", client.phone))
+        proposed_name = display_name if display_name is not None else client.display_name
+        proposed_email = email if email is not None else client.email
+        proposed_phone = phone if phone is not None else client.phone
         if self.duplicates(
             session,
             display_name=proposed_name,
@@ -99,10 +142,26 @@ class ClientService:
             exclude_id=client.id,
         ):
             raise ValueError("possible duplicate client")
-        for key, value in values.items():
-            if not hasattr(client, key) or key in {"id", "created_at", "updated_at"}:
-                raise ValueError(f"invalid client field: {key}")
-            setattr(client, key, value)
+        if display_name is not None:
+            client.display_name = display_name
+        if legal_name is not None:
+            client.legal_name = legal_name
+        if abn is not None:
+            client.abn = abn
+        if contact_name is not None:
+            client.contact_name = contact_name
+        if email is not None:
+            client.email = email
+        if phone is not None:
+            client.phone = phone
+        if billing_address is not None:
+            client.billing_address = billing_address
+        if default_terms_days is not None:
+            client.default_terms_days = default_terms_days
+        if default_notes is not None:
+            client.default_notes = default_notes
+        if active is not None:
+            client.active = active
         if not client.display_name.strip():
             raise ValueError("display name is required")
         client.updated_at = utc_now()
@@ -113,12 +172,13 @@ class ClientService:
             entity_type="client",
             entity_id=client.id,
             summary="Updated client",
+            user_id=user_id,
             before=before,
             after={"display_name": client.display_name, "email": client.email},
         )
         return client
 
-    def deactivate(self, session: Session, client: Client) -> None:
+    def deactivate(self, session: Session, client: Client, *, user_id: int | None = None) -> None:
         client.active = False
         self.audit.record(
             session,
@@ -126,9 +186,10 @@ class ClientService:
             entity_type="client",
             entity_id=client.id,
             summary="Deactivated client",
+            user_id=user_id,
         )
 
-    def delete(self, session: Session, client: Client) -> None:
+    def delete(self, session: Session, client: Client, *, user_id: int | None = None) -> None:
         if session.scalar(select(Invoice.id).where(Invoice.client_id == client.id).limit(1)):
             raise ValueError("client is referenced by invoices")
         session.delete(client)
@@ -138,9 +199,12 @@ class ClientService:
             entity_type="client",
             entity_id=client.id,
             summary="Deleted client",
+            user_id=user_id,
         )
 
-    def merge(self, session: Session, source: Client, target: Client) -> Client:
+    def merge(
+        self, session: Session, source: Client, target: Client, *, user_id: int | None = None
+    ) -> Client:
         if source.id == target.id:
             raise ValueError("cannot merge a client into itself")
         if not target.active:
@@ -160,6 +224,7 @@ class ClientService:
             summary=f"Merged client {source.id} into {target.id}",
             before={"source_id": source.id, "invoice_ids": [i.id for i in invoices]},
             after={"target_id": target.id},
+            user_id=user_id,
         )
         return target
 

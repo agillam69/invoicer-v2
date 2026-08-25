@@ -46,6 +46,7 @@ class MainWindow(QMainWindow):
         log_path: Path | None = None,
         session: Session | None = None,
         paths: AppPaths | None = None,
+        user_id: int | None = None,
     ) -> None:
         super().__init__()
         self.setWindowTitle("Invoicer V2")
@@ -57,8 +58,8 @@ class MainWindow(QMainWindow):
             QListWidgetItem(destination, self.nav)
         self.pages = QStackedWidget()
         resolved_paths = paths or AppPaths.resolve()
-        editor_view = InvoiceEditorView(session, paths=resolved_paths)
-        invoice_list_view = InvoiceListView(session, paths=resolved_paths)
+        editor_view = InvoiceEditorView(session, paths=resolved_paths, user_id=user_id)
+        invoice_list_view = InvoiceListView(session, paths=resolved_paths, user_id=user_id)
         invoice_list_view.invoice_selected.connect(editor_view.load_invoice)
         for destination in DESTINATIONS:
             page: QWidget
@@ -67,9 +68,9 @@ class MainWindow(QMainWindow):
             elif destination == "Invoices":
                 page = invoice_list_view
             elif destination == "Clients":
-                page = ClientsView(session)
+                page = ClientsView(session, paths=resolved_paths, user_id=user_id)
             elif destination == "Products & Services":
-                page = ServicesView(session)
+                page = ServicesView(session, user_id=user_id)
             else:
                 page = QWidget()
             if destination not in {

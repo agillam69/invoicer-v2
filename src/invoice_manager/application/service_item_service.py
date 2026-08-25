@@ -38,6 +38,7 @@ class ServiceItemService:
         taxable: bool = False,
         category_id: int | None = None,
         active: bool = True,
+        user_id: int | None = None,
     ) -> ServiceItem:
         if not name.strip():
             raise ValueError("service name is required")
@@ -63,6 +64,7 @@ class ServiceItemService:
             entity_type="service_item",
             entity_id=item.id,
             summary="Created service item",
+            user_id=user_id,
         )
         return item
 
@@ -79,6 +81,7 @@ class ServiceItemService:
         taxable: bool | None = None,
         category_id: int | None = None,
         active: bool | None = None,
+        user_id: int | None = None,
     ) -> ServiceItem:
         before = {"name": item.name, "unit_price_cents": item.unit_price_cents}
         if name is not None and not name.strip():
@@ -114,10 +117,13 @@ class ServiceItemService:
             summary="Updated service item",
             before=before,
             after={"name": item.name, "unit_price_cents": item.unit_price_cents},
+            user_id=user_id,
         )
         return item
 
-    def set_active(self, session: Session, item: ServiceItem, active: bool) -> None:
+    def set_active(
+        self, session: Session, item: ServiceItem, active: bool, *, user_id: int | None = None
+    ) -> None:
         item.active = active
         session.flush()
         self.audit.record(
@@ -126,4 +132,5 @@ class ServiceItemService:
             entity_type="service_item",
             entity_id=item.id,
             summary="Changed service item active state",
+            user_id=user_id,
         )
