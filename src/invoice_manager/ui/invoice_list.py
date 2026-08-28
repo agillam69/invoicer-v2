@@ -22,7 +22,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from invoice_manager.documents.invoice_docx import generate_invoice_docx
 from invoice_manager.documents.invoice_pdf import generate_invoice_pdf
+from invoice_manager.documents.invoice_xlsx import generate_invoice_xlsx
 from invoice_manager.persistence.models import Invoice
 from invoice_manager.ui.app_context import AppContext
 from invoice_manager.ui.credit_note_dialog import CreditNoteDialog
@@ -75,6 +77,10 @@ class InvoiceListPage(QWidget):
         edit_btn.clicked.connect(self._edit_invoice)
         open_pdf_btn = QPushButton("Open PDF")
         open_pdf_btn.clicked.connect(self._open_pdf)
+        xlsx_btn = QPushButton("Excel")
+        xlsx_btn.clicked.connect(self._generate_xlsx)
+        docx_btn = QPushButton("Word")
+        docx_btn.clicked.connect(self._generate_docx)
         credit_btn = QPushButton("Credit note")
         credit_btn.clicked.connect(self._credit_note)
         cancel_btn = QPushButton("Cancel")
@@ -85,6 +91,8 @@ class InvoiceListPage(QWidget):
         regen_btn.clicked.connect(self._regenerate_pdf)
         action_bar.addWidget(edit_btn)
         action_bar.addWidget(open_pdf_btn)
+        action_bar.addWidget(xlsx_btn)
+        action_bar.addWidget(docx_btn)
         action_bar.addWidget(credit_btn)
         action_bar.addWidget(cancel_btn)
         action_bar.addWidget(void_btn)
@@ -208,6 +216,86 @@ class InvoiceListPage(QWidget):
         except Exception as exc:  # noqa: BLE001
             QMessageBox.warning(self, "Void failed", str(exc))
 
+    def _generate_xlsx(self) -> None:
+        inv = self._selected_invoice()
+        if inv is None:
+            QMessageBox.information(self, "Select invoice", "Select an invoice.")
+            return
+        if inv.is_draft:
+            QMessageBox.information(self, "Not issued", "Draft invoices cannot be exported.")
+            return
+        try:
+            settings = self._invoice_settings()
+            xlsx_path = (
+                self._context.config.get_data_directory()
+                / "documents"
+                / "invoices"
+                / str(cast(date, inv.issue_date).year)
+                / f"{inv.number}.xlsx"
+            )
+            generate_invoice_xlsx(inv, settings, xlsx_path)
+            QMessageBox.information(self, "Excel saved", f"Saved {xlsx_path}")
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Excel failed", str(exc))
+
+    def _generate_docx(self) -> None:
+        inv = self._selected_invoice()
+        if inv is None:
+            QMessageBox.information(self, "Select invoice", "Select an invoice.")
+            return
+        if inv.is_draft:
+            QMessageBox.information(self, "Not issued", "Draft invoices cannot be exported.")
+            return
+        try:
+            settings = self._invoice_settings()
+            docx_path = (
+                self._context.config.get_data_directory()
+                / "documents"
+                / "invoices"
+                / str(cast(date, inv.issue_date).year)
+                / f"{inv.number}.docx"
+            )
+            generate_invoice_docx(inv, settings, docx_path)
+            QMessageBox.information(self, "Word saved", f"Saved {docx_path}")
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Word failed", str(exc))
+
+    def _invoice_settings(self) -> dict[str, Any]:
+        keys = [
+            "business_name",
+            "business_address",
+            "gst_rate",
+            "bank_name",
+            "bank_bsb",
+            "bank_account",
+            "bank_account_name",
+            "thank_you_note",
+        ] + [
+            "invoice_title_tax",
+            "invoice_title",
+            "invoice_date_label",
+            "invoice_due_date_label",
+            "invoice_client_label",
+            "invoice_address_label",
+            "invoice_description_header",
+            "invoice_qty_header",
+            "invoice_unit_header",
+            "invoice_price_header",
+            "invoice_gst_header",
+            "invoice_total_header",
+            "invoice_subtotal_label",
+            "invoice_gst_label",
+            "invoice_total_label",
+            "invoice_payment_details_label",
+            "invoice_bank_label",
+            "invoice_bsb_label",
+            "invoice_account_label",
+            "invoice_account_name_label",
+            "invoice_notes_label",
+            "invoice_thank_you",
+        ]
+        return {k: self._context.setting_repo.get(k) for k in keys}
+
     def _regenerate_pdf(self) -> None:
         inv = self._selected_invoice()
         if inv is None:
@@ -217,19 +305,7 @@ class InvoiceListPage(QWidget):
             QMessageBox.information(self, "Not issued", "Draft invoices do not have a PDF.")
             return
         try:
-            settings = {
-                k: self._context.setting_repo.get(k)
-                for k in [
-                    "business_name",
-                    "business_address",
-                    "gst_rate",
-                    "bank_name",
-                    "bank_bsb",
-                    "bank_account",
-                    "bank_account_name",
-                    "thank_you_note",
-                ]
-            }
+            settings = self._invoice_settings()
             pdf_path = (
                 self._context.config.get_data_directory()
                 / "documents"
@@ -343,6 +419,8 @@ class InvoiceListPage(QWidget):
         menu.addAction("Cancel", self._cancel_invoice)
         menu.addAction("Void", self._void_invoice)
         menu.addSeparator()
-        menu.addAction("Regenerate PDF", self._regenerate_pdf)
         menu.addAction("Open PDF", self._open_pdf)
+        menu.addAction("Regenerate PDF", self._regenerate_pdf)
+        menu.addAction("Generate Excel", self._generate_xlsx)
+        menu.addAction("Generate Word", self._generate_docx)
         menu.exec(self._table.viewport().mapToGlobal(pos))

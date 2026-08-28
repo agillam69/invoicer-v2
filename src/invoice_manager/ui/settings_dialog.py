@@ -45,6 +45,56 @@ class SettingsDialog(QDialog):
         "thank_you_note",
     ]
 
+    _INVOICE_WORDING = [
+        "invoice_title_tax",
+        "invoice_title",
+        "invoice_date_label",
+        "invoice_due_date_label",
+        "invoice_client_label",
+        "invoice_address_label",
+        "invoice_description_header",
+        "invoice_qty_header",
+        "invoice_unit_header",
+        "invoice_price_header",
+        "invoice_gst_header",
+        "invoice_total_header",
+        "invoice_subtotal_label",
+        "invoice_gst_label",
+        "invoice_total_label",
+        "invoice_payment_details_label",
+        "invoice_bank_label",
+        "invoice_bsb_label",
+        "invoice_account_label",
+        "invoice_account_name_label",
+        "invoice_notes_label",
+        "invoice_thank_you",
+    ]
+
+    _INVOICE_DEFAULTS = {
+        "invoice_title_tax": "TAX INVOICE",
+        "invoice_title": "INVOICE",
+        "invoice_date_label": "Date:",
+        "invoice_due_date_label": "Due date:",
+        "invoice_client_label": "Client:",
+        "invoice_address_label": "Address:",
+        "invoice_description_header": "Description",
+        "invoice_qty_header": "Qty",
+        "invoice_unit_header": "Unit",
+        "invoice_price_header": "Price",
+        "invoice_gst_header": "GST",
+        "invoice_total_header": "Total",
+        "invoice_subtotal_label": "Subtotal",
+        "invoice_gst_label": "GST",
+        "invoice_total_label": "Total",
+        "invoice_payment_details_label": "Payment details",
+        "invoice_bank_label": "Bank:",
+        "invoice_bsb_label": "BSB:",
+        "invoice_account_label": "Account:",
+        "invoice_account_name_label": "Name:",
+        "invoice_notes_label": "Notes:",
+        "invoice_thank_you": "Thank you for your business!",
+    }
+
     def __init__(self, context: AppContext, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._context = context
@@ -158,6 +208,16 @@ class SettingsDialog(QDialog):
         data_form.addRow(QLabel("Changing data folders requires a restart to take effect."))
         data_group.setLayout(data_form)
         tabs.addTab(data_group, "Data")
+
+        # Invoice wording tab
+        invoice_group = QGroupBox("Invoice PDF wording")
+        invoice_form = QFormLayout()
+        for key in self._INVOICE_WORDING:
+            edit = QLineEdit()
+            invoice_form.addRow(self._label(key), edit)
+            self._fields[key] = edit
+        invoice_group.setLayout(invoice_form)
+        tabs.addTab(invoice_group, "Invoice")
 
         layout.addWidget(tabs)
 
