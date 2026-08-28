@@ -17,6 +17,7 @@ from invoice_manager.persistence.repositories import (
     InvoiceRepository,
     LedgerRepository,
     PaymentRepository,
+    ServiceItemRepository,
     SettingRepository,
 )
 
@@ -35,6 +36,7 @@ class AppContext:
         self.client_repo = ClientRepository(self.session)
         self.invoice_repo = InvoiceRepository(self.session)
         self.payment_repo = PaymentRepository(self.session)
+        self.service_repo = ServiceItemRepository(self.session)
         self.ledger_repo = LedgerRepository(self.session)
         self.setting_repo = SettingRepository(self.session)
 

@@ -21,10 +21,13 @@ from invoice_manager.infrastructure.logging_setup import get_logger
 from invoice_manager.ui.app_context import AppContext
 from invoice_manager.ui.clients_page import ClientsPage
 from invoice_manager.ui.dashboard_page import DashboardPage
+from invoice_manager.ui.invoice_editor import InvoiceEditorDialog
 from invoice_manager.ui.invoice_list import InvoiceListPage
 from invoice_manager.ui.ledger_page import LedgerPage
 from invoice_manager.ui.migration_wizard import MigrationWizard
 from invoice_manager.ui.payments_page import PaymentsPage
+from invoice_manager.ui.reports_page import ReportsPage
+from invoice_manager.ui.service_items_page import ServiceItemsPage
 
 _log = get_logger("invoice_manager.ui.main_window")
 
@@ -98,8 +101,12 @@ class MainWindow(QMainWindow):
             return PaymentsPage(self._context)
         if label == "Clients":
             return ClientsPage(self._context)
+        if label == "Products & Services":
+            return ServiceItemsPage(self._context)
         if label == "Income & Expenses":
             return LedgerPage(self._context)
+        if label == "Reports":
+            return ReportsPage(self._context)
         return self._placeholder_page(label)
 
     def _placeholder_page(self, label: str) -> QWidget:
@@ -110,6 +117,11 @@ class MainWindow(QMainWindow):
         return page
 
     def _on_nav_changed(self, index: int) -> None:
+        label = _NAV_ITEMS[index]
+        if label == "New Invoice":
+            self._open_new_invoice()
+            self._nav.setCurrentRow(2)
+            return
         self._stack.setCurrentIndex(index)
         page = self._pages[index]
         if hasattr(page, "refresh"):
@@ -125,6 +137,13 @@ class MainWindow(QMainWindow):
     def _open_migration_wizard(self) -> None:
         wizard = MigrationWizard(self._config, parent=self)
         wizard.exec()
+
+    def _open_new_invoice(self) -> None:
+        dlg = InvoiceEditorDialog(self._context, parent=self)
+        if dlg.exec() == 1:
+            invoices_page = self._pages[2]
+            if isinstance(invoices_page, InvoiceListPage):
+                invoices_page.refresh()
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
         self._context.session.close()
