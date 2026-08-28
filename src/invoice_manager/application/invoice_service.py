@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import cast
+from typing import Any, cast
 
 from invoice_manager.domain.invoices import InvoiceTotals, calculate_line_total
 from invoice_manager.domain.money import Money
@@ -142,6 +142,52 @@ class InvoiceService:
         invoice.items.remove(item)
         self._recalc(invoice)
         self._audit.record("line_removed", "invoice_items", item.id, {"invoice_id": invoice.id})
+
+    def update_invoice(
+        self,
+        invoice: Invoice,
+        issue_date: date,
+        due_date: date,
+        notes: str | None,
+        lines: list[dict[str, Any]],
+    ) -> Invoice:
+        """Replace line items and recalculate totals for an existing invoice."""
+        if invoice.is_void:
+            raise InvoiceServiceError("Cannot edit a void invoice")
+        if invoice.is_cancelled:
+            raise InvoiceServiceError("Cannot edit a cancelled invoice")
+        if not lines or all(line.get("unit_price_cents", 0) == 0 for line in lines):
+            raise InvoiceServiceError("Invoice must have at least one priced line item")
+        invoice.issue_date = issue_date  # type: ignore[assignment]
+        invoice.due_date = due_date  # type: ignore[assignment]
+        invoice.notes = notes
+        invoice.items.clear()
+        for sort_order, line in enumerate(lines):
+            subtotal, gst, total = calculate_line_total(
+                line["quantity"],
+                line["unit_price_cents"],
+                line["discount_cents"],
+                line["taxable"],
+                self._gst_rate,
+            )
+            item = InvoiceItem(
+                invoice_id=invoice.id,
+                description=line["description"].strip(),
+                quantity=line["quantity"],
+                unit="ea",
+                unit_price_cents=line["unit_price_cents"],
+                discount_cents=line["discount_cents"],
+                taxable=line["taxable"],
+                subtotal_cents=subtotal,
+                gst_cents=gst,
+                total_cents=total,
+                sort_order=sort_order,
+            )
+            invoice.items.append(item)
+        self._recalc(invoice)
+        self._update_status(invoice)
+        self._audit.record("invoice_updated", "invoices", invoice.id, {"number": invoice.number})
+        return invoice
 
     def issue(self, invoice: Invoice) -> Invoice:
         if not invoice.is_draft:

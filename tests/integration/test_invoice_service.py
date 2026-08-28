@@ -119,3 +119,81 @@ def test_due_date_defaults_to_terms(invoice_deps):
     today = date.today()
     inv = service.create_draft(client.id, invoice_date=today)
     assert inv.due_date == today + timedelta(days=7)
+
+
+def test_update_issued_invoice_recalculates_totals(invoice_deps):
+    service, client, session = invoice_deps
+    inv = service.create_draft(client.id)
+    service.add_line(inv, "Work", 1, 10000)
+    service.issue(inv)
+    service.update_invoice(
+        inv,
+        inv.issue_date,
+        inv.due_date,
+        None,
+        [
+            {
+                "description": "More work",
+                "quantity": 2,
+                "unit_price_cents": 10000,
+                "discount_cents": 0,
+                "taxable": True,
+            }
+        ],
+    )
+    assert inv.subtotal_cents == 20000
+    assert inv.gst_cents == 2000
+    assert inv.total_cents == 22000
+
+
+def test_update_invoice_with_payments_updates_status(invoice_deps):
+    service, client, session = invoice_deps
+    inv = service.create_draft(client.id)
+    service.add_line(inv, "Work", 1, 10000)
+    service.issue(inv)
+    service._payment_repo.create(
+        invoice_id=inv.id,
+        amount_cents=11000,
+        date=date.today(),
+        method="cash",
+    )
+    service.update_invoice(
+        inv,
+        inv.issue_date,
+        inv.due_date,
+        None,
+        [
+            {
+                "description": "Work",
+                "quantity": 1,
+                "unit_price_cents": 20000,
+                "discount_cents": 0,
+                "taxable": True,
+            }
+        ],
+    )
+    assert inv.status == InvoiceStatus.PART_PAID.value
+
+
+def test_cannot_update_void_invoice(invoice_deps):
+    service, client, session = invoice_deps
+    inv = service.create_draft(client.id)
+    service.add_line(inv, "Work", 1, 10000)
+    service.issue(inv)
+    service.void(inv, "Mistake")
+    with pytest.raises(InvoiceServiceError):
+        service.update_invoice(
+            inv,
+            inv.issue_date,
+            inv.due_date,
+            None,
+            [
+                {
+                    "description": "Work",
+                    "quantity": 1,
+                    "unit_price_cents": 5000,
+                    "discount_cents": 0,
+                    "taxable": True,
+                }
+            ],
+        )

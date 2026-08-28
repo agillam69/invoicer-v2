@@ -1,4 +1,4 @@
-"""Dialog for creating a new invoice."""
+"""Dialog for creating and editing invoices."""
 
 from __future__ import annotations
 
@@ -33,19 +33,25 @@ from invoice_manager.ui.app_context import AppContext
 
 
 class InvoiceEditorDialog(QDialog):
-    """Create and optionally issue a new invoice."""
+    """Create a new invoice or edit an existing draft/issued invoice."""
 
-    def __init__(self, context: AppContext, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        context: AppContext,
+        invoice: Invoice | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self._context = context
-        self.setWindowTitle("New Invoice")
+        self._invoice = invoice
         self.setMinimumSize(700, 500)
-        self._invoice: Invoice | None = None
         self._clients: list[Client] = []
         self._build_ui()
         self._load_clients()
         self._load_services()
         self._table.itemChanged.connect(self._recalc)
+        self._load_invoice()
+        self._setup_mode()
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -114,13 +120,16 @@ class InvoiceEditorDialog(QDialog):
         bbox = QDialogButtonBox()
         self._save_draft_btn = bbox.addButton("Save Draft", QDialogButtonBox.ButtonRole.ActionRole)
         self._issue_btn = bbox.addButton("Issue", QDialogButtonBox.ButtonRole.ActionRole)
+        self._update_btn = bbox.addButton("Update", QDialogButtonBox.ButtonRole.ActionRole)
         bbox.addButton(QDialogButtonBox.StandardButton.Cancel)
         bbox.rejected.connect(self.reject)
         self._save_draft_btn.clicked.connect(self._save_draft)
         self._issue_btn.clicked.connect(self._issue)
+        self._update_btn.clicked.connect(self._update)
         layout.addWidget(bbox)
 
-        self._add_line()
+        if self._invoice is None:
+            self._add_line()
 
     def _load_clients(self) -> None:
         self._clients = self._context.client_repo.list_active()
@@ -134,6 +143,54 @@ class InvoiceEditorDialog(QDialog):
     def _load_services(self) -> None:
         for item in self._context.service_repo.list_active():
             self._service_combo.addItem(item.description, item.id)
+
+    def _load_invoice(self) -> None:
+        if self._invoice is None:
+            return
+        if self._invoice.client_id is not None:
+            for idx, client in enumerate(self._clients):
+                if client.id == self._invoice.client_id:
+                    self._client.setCurrentIndex(idx)
+                    break
+        issue_date = cast(date, self._invoice.issue_date)
+        self._issue_date.setDate(QDate(issue_date.year, issue_date.month, issue_date.day))
+        due = cast(date | None, self._invoice.due_date) or issue_date
+        self._due_date.setDate(QDate(due.year, due.month, due.day))
+        if self._invoice.notes:
+            self._notes.setPlainText(self._invoice.notes)
+        self._table.blockSignals(True)
+        for item in self._invoice.items:
+            self._add_line(
+                description=item.description,
+                quantity=item.quantity,
+                unit_price_cents=item.unit_price_cents,
+                taxable=item.taxable,
+            )
+            row = self._table.rowCount() - 1
+            discount_item = self._table.item(row, 4)
+            if discount_item is not None:
+                discount_item.setText(f"{item.discount_cents / 100:.2f}")
+        self._table.blockSignals(False)
+        self._recalc()
+
+    def _setup_mode(self) -> None:
+        if self._invoice is None:
+            self.setWindowTitle("New Invoice")
+            self._save_draft_btn.setVisible(True)
+            self._issue_btn.setVisible(True)
+            self._update_btn.setVisible(False)
+            return
+        if self._invoice.is_draft:
+            self.setWindowTitle(f"Edit Draft {self._invoice.id}")
+            self._save_draft_btn.setVisible(True)
+            self._issue_btn.setVisible(True)
+            self._update_btn.setVisible(False)
+        else:
+            self.setWindowTitle(f"Edit Invoice {self._invoice.number}")
+            self._save_draft_btn.setVisible(False)
+            self._issue_btn.setVisible(False)
+            self._update_btn.setVisible(True)
+            self._client.setEnabled(False)
 
     def _update_due_date(self) -> None:
         terms = int(self._context.setting_repo.get("payment_terms_days") or 7)
@@ -253,16 +310,30 @@ class InvoiceEditorDialog(QDialog):
             due_date=cast(date, self._due_date.date().toPython()),
             notes=self._notes.toPlainText().strip() or None,
         )
-        for line in lines:
-            self._context.invoice_service.add_line(
-                invoice,
-                line["description"],
-                line["quantity"],
-                line["unit_price_cents"],
-                line["taxable"],
-                line["discount_cents"],
-            )
+        self._context.invoice_service.update_invoice(
+            invoice,
+            cast(date, self._issue_date.date().toPython()),
+            cast(date, self._due_date.date().toPython()),
+            self._notes.toPlainText().strip() or None,
+            lines,
+        )
         return invoice
+
+    def _update_existing(self) -> Invoice | None:
+        if self._invoice is None:
+            return None
+        lines = self._collect_lines()
+        if not lines or all(line["unit_price_cents"] == 0 for line in lines):
+            QMessageBox.warning(self, "No lines", "Add at least one priced line item.")
+            return None
+        self._context.invoice_service.update_invoice(
+            self._invoice,
+            cast(date, self._issue_date.date().toPython()),
+            cast(date, self._due_date.date().toPython()),
+            self._notes.toPlainText().strip() or None,
+            lines,
+        )
+        return self._invoice
 
     def _save_draft(self) -> None:
         self._invoice = self._create_invoice()
@@ -277,6 +348,19 @@ class InvoiceEditorDialog(QDialog):
             return
         self._context.invoice_service.issue(invoice)
         self._context.session.commit()
+        self._generate_pdf(invoice)
+        self._invoice = invoice
+        self.accept()
+
+    def _update(self) -> None:
+        invoice = self._update_existing()
+        if invoice is None:
+            return
+        self._context.session.commit()
+        self._generate_pdf(invoice)
+        self.accept()
+
+    def _generate_pdf(self, invoice: Invoice) -> None:
         try:
             settings = {
                 k: self._context.setting_repo.get(k)
@@ -302,9 +386,7 @@ class InvoiceEditorDialog(QDialog):
             invoice.pdf_path = str(pdf_path)
             self._context.session.commit()
             QMessageBox.information(
-                self, "Issued", f"Invoice {invoice.number} issued and PDF saved."
+                self, "Saved", f"Invoice {invoice.number} updated and PDF saved."
             )
         except Exception as exc:  # noqa: BLE001
             QMessageBox.warning(self, "PDF failed", str(exc))
-        self._invoice = invoice
-        self.accept()

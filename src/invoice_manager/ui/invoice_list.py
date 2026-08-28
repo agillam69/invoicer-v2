@@ -65,6 +65,8 @@ class InvoiceListPage(QWidget):
         layout.addWidget(self._table)
 
         action_bar = QHBoxLayout()
+        edit_btn = QPushButton("Edit")
+        edit_btn.clicked.connect(self._edit_invoice)
         open_pdf_btn = QPushButton("Open PDF")
         open_pdf_btn.clicked.connect(self._open_pdf)
         cancel_btn = QPushButton("Cancel")
@@ -73,6 +75,7 @@ class InvoiceListPage(QWidget):
         void_btn.clicked.connect(self._void_invoice)
         regen_btn = QPushButton("Regenerate PDF")
         regen_btn.clicked.connect(self._regenerate_pdf)
+        action_bar.addWidget(edit_btn)
         action_bar.addWidget(open_pdf_btn)
         action_bar.addWidget(cancel_btn)
         action_bar.addWidget(void_btn)
@@ -125,6 +128,20 @@ class InvoiceListPage(QWidget):
 
     def _record_manual(self) -> None:
         dlg = ManualInvoiceDialog(self._context, parent=self)
+        if dlg.exec() == 1:
+            self.refresh()
+
+    def _edit_invoice(self) -> None:
+        inv = self._selected_invoice()
+        if inv is None:
+            QMessageBox.information(self, "Select invoice", "Select an invoice to edit.")
+            return
+        if inv.is_void or inv.is_cancelled:
+            QMessageBox.information(
+                self, "Cannot edit", "Void or cancelled invoices cannot be edited."
+            )
+            return
+        dlg = InvoiceEditorDialog(self._context, invoice=inv, parent=self)
         if dlg.exec() == 1:
             self.refresh()
 
