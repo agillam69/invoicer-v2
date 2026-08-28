@@ -125,7 +125,10 @@ class ClientsPage(QWidget):
         action_bar = QHBoxLayout()
         edit_btn = QPushButton("Edit")
         edit_btn.clicked.connect(self._edit_client)
+        delete_btn = QPushButton("Delete")
+        delete_btn.clicked.connect(self._delete_client)
         action_bar.addWidget(edit_btn)
+        action_bar.addWidget(delete_btn)
         action_bar.addStretch()
         layout.addLayout(action_bar)
 
@@ -157,3 +160,20 @@ class ClientsPage(QWidget):
         dlg = ClientDialog(self._context, client=client, parent=self)
         if dlg.exec() == 1:
             self.refresh()
+
+    def _delete_client(self) -> None:
+        client = self._selected_client()
+        if client is None:
+            QMessageBox.information(self, "Select client", "Select a client to delete.")
+            return
+        reply = QMessageBox.question(
+            self,
+            "Confirm delete",
+            f"Delete client '{client.name}'? This will not delete existing invoices.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        client.is_deleted = True
+        self._context.session.commit()
+        self.refresh()

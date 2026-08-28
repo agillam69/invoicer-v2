@@ -127,7 +127,10 @@ class ServiceItemsPage(QWidget):
         action_bar = QHBoxLayout()
         edit_btn = QPushButton("Edit")
         edit_btn.clicked.connect(self._edit_item)
+        delete_btn = QPushButton("Delete")
+        delete_btn.clicked.connect(self._delete_item)
         action_bar.addWidget(edit_btn)
+        action_bar.addWidget(delete_btn)
         action_bar.addStretch()
         layout.addLayout(action_bar)
 
@@ -162,3 +165,20 @@ class ServiceItemsPage(QWidget):
         dlg = ServiceItemDialog(self._context, item=item, parent=self)
         if dlg.exec() == 1:
             self.refresh()
+
+    def _delete_item(self) -> None:
+        item = self._selected_item()
+        if item is None:
+            QMessageBox.information(self, "Select item", "Select an item to delete.")
+            return
+        reply = QMessageBox.question(
+            self,
+            "Confirm delete",
+            f"Delete service item '{item.description}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        item.is_deleted = True
+        self._context.session.commit()
+        self.refresh()

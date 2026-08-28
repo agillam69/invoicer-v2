@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -166,7 +167,10 @@ class PaymentsPage(QWidget):
         action_bar = QHBoxLayout()
         open_pdf_btn = QPushButton("Open PDF")
         open_pdf_btn.clicked.connect(self._open_pdf)
+        reverse_btn = QPushButton("Reverse")
+        reverse_btn.clicked.connect(self._reverse_payment)
         action_bar.addWidget(open_pdf_btn)
+        action_bar.addWidget(reverse_btn)
         action_bar.addStretch()
         layout.addLayout(action_bar)
 
@@ -207,3 +211,21 @@ class PaymentsPage(QWidget):
             QMessageBox.warning(self, "Missing", f"PDF not found: {path}")
             return
         os.startfile(str(path))
+
+    def _reverse_payment(self) -> None:
+        payment = self._selected_payment()
+        if payment is None:
+            QMessageBox.information(self, "Select payment", "Select a payment to reverse.")
+            return
+        if payment.is_reversed:
+            QMessageBox.information(self, "Already reversed", "This payment is already reversed.")
+            return
+        reason, ok = QInputDialog.getText(self, "Reverse Payment", "Reason for reversal:")
+        if not ok or not reason.strip():
+            return
+        try:
+            self._context.payment_service.reverse(payment, reason.strip())
+            self._context.session.commit()
+            self.refresh()
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Reverse failed", str(exc))
