@@ -2,6 +2,10 @@
 
 Phase 1 covers foundation concerns. Later workflows remain explicitly pending.
 
+Phase 1 status: implemented and green (`pytest`, `ruff check`, `ruff format --check`,
+`mypy src/invoice_manager`). Schema, constraint and storage-layout coverage lives in
+`tests/integration/test_schema.py`; the login dialog and shell in `tests/gui/test_shell.py`.
+
 | Requirement | Phase | Tests |
 |---|---|---|
 | FR-AUTH-001 | Phase 1 | `tests/integration/test_auth.py` |
@@ -37,7 +41,7 @@ Phase 1 covers foundation concerns. Later workflows remain explicitly pending.
 | FR-INV-015 | Pending Phase 5 | Pending |
 | FR-PAY-001 | Pending Phase 4 | Pending |
 | FR-PAY-002 | Pending Phase 4 | Pending |
-| FR-PAY-003 | Phase 1 | `tests/domain/test_statuses.py` |
+| FR-PAY-003 | Phase 1 | `tests/domain/test_statuses.py`, `tests/integration/test_schema.py` |
 | FR-PAY-004 | Pending Phase 4 | Pending |
 | FR-RCT-001 | Pending Phase 4 | Pending |
 | FR-RCT-002 | Phase 1 | `tests/integration/test_numbering.py` |
@@ -62,12 +66,12 @@ Phase 1 covers foundation concerns. Later workflows remain explicitly pending.
 | FR-SET-001 | Pending Phase 3 | Pending |
 | FR-SET-002 | Pending Phase 3 | Pending |
 | FR-SET-003 | Phase 1 | `tests/integration/test_numbering.py` |
-| FR-SET-004 | Phase 1 | `tests/domain/test_money.py` |
+| FR-SET-004 | Phase 1 | `tests/domain/test_money.py`, `tests/integration/test_schema.py` |
 | FR-SET-005 | Pending Phase 3 | Pending |
 | FR-SET-006 | Pending Phase 6 | Pending |
 | FR-DOC-001 | Pending Phase 3 | Pending |
 | FR-DOC-002 | Pending Phase 3 | Pending |
-| FR-DOC-003 | Phase 1 | `tests/domain/test_validation.py` |
+| FR-DOC-003 | Phase 1 | `tests/domain/test_validation.py`, `tests/integration/test_schema.py` |
 | FR-DOC-004 | Pending Phase 3 | Pending |
 | FR-DOC-005 | Pending Phase 2 | Pending |
 | FR-DOC-006 | Pending Phase 2 | Pending |
