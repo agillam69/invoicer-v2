@@ -39,6 +39,8 @@ dist/
 backups/
 logs/
 exports/
+/data/
+/documents/
 
 # IDE
 .vscode/

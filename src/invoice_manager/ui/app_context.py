@@ -6,6 +6,7 @@ from decimal import Decimal
 
 from invoice_manager.application.invoice_service import InvoiceService
 from invoice_manager.application.ledger_service import LedgerService
+from invoice_manager.application.payment_service import PaymentService
 from invoice_manager.infrastructure.audit import AuditService
 from invoice_manager.infrastructure.config import AppConfig
 from invoice_manager.infrastructure.file_store import FileStore
@@ -52,5 +53,11 @@ class AppContext:
             audit=self.audit,
             gst_rate=gst_rate,
             payment_terms_days=payment_terms,
+        )
+        self.payment_service = PaymentService(
+            payment_repo=self.payment_repo,
+            invoice_repo=self.invoice_repo,
+            setting_repo=self.setting_repo,
+            audit=self.audit,
         )
         self.ledger_service = LedgerService(self.ledger_repo, self.audit)

@@ -19,9 +19,12 @@ from PySide6.QtWidgets import (
 from invoice_manager.infrastructure.config import AppConfig
 from invoice_manager.infrastructure.logging_setup import get_logger
 from invoice_manager.ui.app_context import AppContext
+from invoice_manager.ui.clients_page import ClientsPage
+from invoice_manager.ui.dashboard_page import DashboardPage
 from invoice_manager.ui.invoice_list import InvoiceListPage
 from invoice_manager.ui.ledger_page import LedgerPage
 from invoice_manager.ui.migration_wizard import MigrationWizard
+from invoice_manager.ui.payments_page import PaymentsPage
 
 _log = get_logger("invoice_manager.ui.main_window")
 
@@ -87,8 +90,14 @@ class MainWindow(QMainWindow):
         self._build_menu()
 
     def _create_page(self, label: str) -> QWidget:
+        if label == "Dashboard":
+            return DashboardPage(self._context)
         if label == "Invoices":
             return InvoiceListPage(self._context)
+        if label == "Payments & Receipts":
+            return PaymentsPage(self._context)
+        if label == "Clients":
+            return ClientsPage(self._context)
         if label == "Income & Expenses":
             return LedgerPage(self._context)
         return self._placeholder_page(label)
