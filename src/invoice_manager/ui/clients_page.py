@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from datetime import date
 
+from PySide6.QtCore import QPoint, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QDialog,
@@ -12,8 +13,10 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
+    QInputDialog,
     QLabel,
     QLineEdit,
+    QMenu,
     QMessageBox,
     QPushButton,
     QTableWidget,
@@ -124,6 +127,9 @@ class ClientsPage(QWidget):
         self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._table.doubleClicked.connect(self._edit_client)
+        self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._table.customContextMenuRequested.connect(self._context_menu)
         layout.addWidget(self._table)
 
         action_bar = QHBoxLayout()
@@ -181,9 +187,28 @@ class ClientsPage(QWidget):
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
+        reason, ok = QInputDialog.getText(
+            self, "Delete reason (optional)", "Reason for deleting client:"
+        )
+        if not ok:
+            return
         client.is_deleted = True
         self._context.session.commit()
+        self._context.audit.record(
+            "client_deleted", "clients", client.id, {"reason": reason.strip() or None}
+        )
         self.refresh()
+
+    def _context_menu(self, pos: QPoint) -> None:
+        client = self._selected_client()
+        if client is None:
+            return
+        menu = QMenu(self)
+        menu.addAction("Add client", self._add_client)
+        menu.addAction("Edit client", self._edit_client)
+        menu.addAction("Delete client", self._delete_client)
+        menu.addAction("Statement", self._client_statement)
+        menu.exec(self._table.viewport().mapToGlobal(pos))
 
     def _client_statement(self) -> None:
         client = self._selected_client()

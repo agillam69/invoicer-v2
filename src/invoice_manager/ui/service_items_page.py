@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -12,8 +12,10 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
+    QInputDialog,
     QLabel,
     QLineEdit,
+    QMenu,
     QMessageBox,
     QPushButton,
     QTableWidget,
@@ -122,6 +124,9 @@ class ServiceItemsPage(QWidget):
         self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._table.doubleClicked.connect(self._edit_item)
+        self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._table.customContextMenuRequested.connect(self._context_menu)
         layout.addWidget(self._table)
 
         action_bar = QHBoxLayout()
@@ -179,6 +184,24 @@ class ServiceItemsPage(QWidget):
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
+        reason, ok = QInputDialog.getText(
+            self, "Delete reason (optional)", "Reason for deleting service item:"
+        )
+        if not ok:
+            return
         item.is_deleted = True
         self._context.session.commit()
+        self._context.audit.record(
+            "service_item_deleted", "service_items", item.id, {"reason": reason.strip() or None}
+        )
         self.refresh()
+
+    def _context_menu(self, pos: QPoint) -> None:
+        item = self._selected_item()
+        if item is None:
+            return
+        menu = QMenu(self)
+        menu.addAction("Add item", self._add_item)
+        menu.addAction("Edit item", self._edit_item)
+        menu.addAction("Delete item", self._delete_item)
+        menu.exec(self._table.viewport().mapToGlobal(pos))
