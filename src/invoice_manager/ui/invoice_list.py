@@ -63,6 +63,7 @@ class InvoiceListPage(QWidget):
         self._table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._table.doubleClicked.connect(self._edit_invoice)
         layout.addWidget(self._table)
 
         action_bar = QHBoxLayout()
@@ -239,3 +240,60 @@ class InvoiceListPage(QWidget):
             self.refresh()
         except Exception as exc:  # noqa: BLE001
             QMessageBox.warning(self, "PDF failed", str(exc))
+
+    def selected_invoice(self) -> Invoice | None:
+        return self._selected_invoice()
+
+    def modify_selected(self) -> None:
+        self._edit_invoice()
+
+    def open_selected_pdf(self) -> None:
+        self._open_pdf()
+
+    def regenerate_selected_pdf(self) -> None:
+        self._regenerate_pdf()
+
+    def credit_note_selected(self) -> None:
+        self._credit_note()
+
+    def cancel_selected(self) -> None:
+        self._cancel_invoice()
+
+    def void_selected(self) -> None:
+        self._void_invoice()
+
+    def retract_selected(self) -> None:
+        inv = self._selected_invoice()
+        if inv is None:
+            QMessageBox.information(self, "Select invoice", "Select an invoice to retract.")
+            return
+        if inv.is_draft or inv.is_void or inv.is_cancelled:
+            QMessageBox.information(
+                self, "Cannot retract", "Only issued invoices can be retracted."
+            )
+            return
+        try:
+            self._context.invoice_service.retract(inv)
+            self._context.session.commit()
+            self.refresh()
+            QMessageBox.information(
+                self, "Retracted", f"{inv.number} is now a draft and can be edited."
+            )
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Retract failed", str(exc))
+
+    def reissue_selected(self) -> None:
+        inv = self._selected_invoice()
+        if inv is None:
+            QMessageBox.information(self, "Select invoice", "Select an invoice to reissue.")
+            return
+        if not inv.is_draft:
+            QMessageBox.information(self, "Cannot reissue", "Invoice is not a draft.")
+            return
+        try:
+            self._context.invoice_service.reissue(inv)
+            self._context.session.commit()
+            self.refresh()
+            QMessageBox.information(self, "Reissued", f"{inv.number} is now issued.")
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Reissue failed", str(exc))

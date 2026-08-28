@@ -11,7 +11,8 @@ class InstanceLock:
 
     MUTEX_NAME = "Local\\InvoiceReceiptManager_SingleInstance"
 
-    def __init__(self) -> None:
+    def __init__(self, name: str | None = None) -> None:
+        self._name = name or self.MUTEX_NAME
         self._handle: wintypes.HANDLE | None = None
 
     def acquire(self) -> bool:
@@ -21,7 +22,7 @@ class InstanceLock:
         instance is already running.
         """
         kernel32 = ctypes.windll.kernel32
-        self._handle = kernel32.CreateMutexW(None, False, self.MUTEX_NAME)
+        self._handle = kernel32.CreateMutexW(None, False, self._name)
         if not self._handle:
             return False
         return ctypes.GetLastError() != 183  # ERROR_ALREADY_EXISTS

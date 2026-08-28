@@ -219,3 +219,29 @@ def test_cannot_credit_void_or_draft_invoice(invoice_deps):
     service.void(inv, "Mistake")
     with pytest.raises(InvoiceServiceError):
         service.add_credit_note(inv, 1000, "Too late", date.today())
+
+
+def test_retract_and_reissue_preserves_number(invoice_deps):
+    service, client, session = invoice_deps
+    inv = service.create_draft(client.id)
+    service.add_line(inv, "Work", 1, 10000)
+    service.issue(inv)
+    original = inv.number
+    service.retract(inv)
+    assert inv.is_draft is True
+    assert inv.number == original
+    service.reissue(inv)
+    assert inv.is_draft is False
+    assert inv.number == original
+
+
+def test_cannot_retract_invoice_with_payment(invoice_deps):
+    service, client, session = invoice_deps
+    client2 = service._client_repo.create(name="Client 2")
+    inv = service.create_draft(client2.id)
+    service.add_line(inv, "Work", 1, 10000)
+    service.issue(inv)
+    service._payment_repo.create(invoice_id=inv.id, amount_cents=1000, date=date.today(), method="Bank")
+    session.refresh(inv)
+    with pytest.raises(InvoiceServiceError):
+        service.retract(inv)

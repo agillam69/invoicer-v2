@@ -95,10 +95,13 @@ class MainWindow(QMainWindow):
         # Content area
         self._stack = QStackedWidget()
         self._pages: list[QWidget] = []
+        self._invoices_page: InvoiceListPage | None = None
         for label in _NAV_ITEMS:
             page = self._create_page(label)
             self._pages.append(page)
             self._stack.addWidget(page)
+            if isinstance(page, InvoiceListPage):
+                self._invoices_page = page
         layout.addWidget(self._stack, stretch=1)
 
         self._build_menu()
@@ -140,6 +143,27 @@ class MainWindow(QMainWindow):
 
     def _build_menu(self) -> None:
         menu_bar = QMenuBar(self)
+
+        invoices_menu = menu_bar.addMenu("Invoices")
+        new_inv_action = invoices_menu.addAction("New Invoice")
+        new_inv_action.triggered.connect(self._open_new_invoice)
+        edit_inv_action = invoices_menu.addAction("Modify selected")
+        edit_inv_action.triggered.connect(self._modify_selected_invoice)
+        retract_inv_action = invoices_menu.addAction("Retract to draft")
+        retract_inv_action.triggered.connect(self._retract_selected_invoice)
+        reissue_inv_action = invoices_menu.addAction("Reissue")
+        reissue_inv_action.triggered.connect(self._reissue_selected_invoice)
+        credit_inv_action = invoices_menu.addAction("Credit note")
+        credit_inv_action.triggered.connect(self._credit_note_selected_invoice)
+        cancel_inv_action = invoices_menu.addAction("Cancel selected")
+        cancel_inv_action.triggered.connect(self._cancel_selected_invoice)
+        void_inv_action = invoices_menu.addAction("Void selected")
+        void_inv_action.triggered.connect(self._void_selected_invoice)
+        regen_inv_action = invoices_menu.addAction("Regenerate PDF")
+        regen_inv_action.triggered.connect(self._regenerate_pdf_selected_invoice)
+        open_inv_action = invoices_menu.addAction("Open PDF")
+        open_inv_action.triggered.connect(self._open_pdf_selected_invoice)
+
         tools_menu = menu_bar.addMenu("Tools")
         import_action = tools_menu.addAction("Import / Migrate")
         import_action.triggered.connect(self._open_migration_wizard)
@@ -167,10 +191,42 @@ class MainWindow(QMainWindow):
 
     def _open_new_invoice(self) -> None:
         dlg = InvoiceEditorDialog(self._context, parent=self)
-        if dlg.exec() == 1:
-            invoices_page = self._pages[2]
-            if isinstance(invoices_page, InvoiceListPage):
-                invoices_page.refresh()
+        if dlg.exec() == 1 and self._invoices_page is not None:
+            self._invoices_page.refresh()
+
+    def _with_selected_invoice(self, action: str, method_name: str) -> None:
+        if self._invoices_page is None:
+            return
+        inv = self._invoices_page.selected_invoice()
+        if inv is None:
+            QMessageBox.information(self, "Select invoice", f"Select an invoice to {action}.")
+            return
+        self._stack.setCurrentWidget(self._invoices_page)
+        getattr(self._invoices_page, method_name)()
+
+    def _modify_selected_invoice(self) -> None:
+        self._with_selected_invoice("modify", "modify_selected")
+
+    def _retract_selected_invoice(self) -> None:
+        self._with_selected_invoice("retract", "retract_selected")
+
+    def _reissue_selected_invoice(self) -> None:
+        self._with_selected_invoice("reissue", "reissue_selected")
+
+    def _credit_note_selected_invoice(self) -> None:
+        self._with_selected_invoice("credit", "credit_note_selected")
+
+    def _cancel_selected_invoice(self) -> None:
+        self._with_selected_invoice("cancel", "cancel_selected")
+
+    def _void_selected_invoice(self) -> None:
+        self._with_selected_invoice("void", "void_selected")
+
+    def _regenerate_pdf_selected_invoice(self) -> None:
+        self._with_selected_invoice("regenerate PDF", "regenerate_selected_pdf")
+
+    def _open_pdf_selected_invoice(self) -> None:
+        self._with_selected_invoice("open PDF", "open_selected_pdf")
 
     def _generate_accountant_pack(self) -> None:
         now = datetime.now().year

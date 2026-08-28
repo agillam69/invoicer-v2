@@ -295,37 +295,22 @@ class InvoiceEditorDialog(QDialog):
             )
         return lines
 
-    def _create_invoice(self) -> Invoice | None:
-        client_id = self._client.currentData()
-        if client_id is None:
-            QMessageBox.warning(self, "No client", "Please select a client.")
-            return None
+    def _prepare_invoice(self) -> Invoice | None:
         lines = self._collect_lines()
         if not lines or all(line["unit_price_cents"] == 0 for line in lines):
             QMessageBox.warning(self, "No lines", "Add at least one priced line item.")
             return None
-        invoice = self._context.invoice_service.create_draft(
-            client_id=int(client_id),
-            invoice_date=cast(date, self._issue_date.date().toPython()),
-            due_date=cast(date, self._due_date.date().toPython()),
-            notes=self._notes.toPlainText().strip() or None,
-        )
-        self._context.invoice_service.update_invoice(
-            invoice,
-            cast(date, self._issue_date.date().toPython()),
-            cast(date, self._due_date.date().toPython()),
-            self._notes.toPlainText().strip() or None,
-            lines,
-        )
-        return invoice
-
-    def _update_existing(self) -> Invoice | None:
         if self._invoice is None:
-            return None
-        lines = self._collect_lines()
-        if not lines or all(line["unit_price_cents"] == 0 for line in lines):
-            QMessageBox.warning(self, "No lines", "Add at least one priced line item.")
-            return None
+            client_id = self._client.currentData()
+            if client_id is None:
+                QMessageBox.warning(self, "No client", "Please select a client.")
+                return None
+            self._invoice = self._context.invoice_service.create_draft(
+                client_id=int(client_id),
+                invoice_date=cast(date, self._issue_date.date().toPython()),
+                due_date=cast(date, self._due_date.date().toPython()),
+                notes=self._notes.toPlainText().strip() or None,
+            )
         self._context.invoice_service.update_invoice(
             self._invoice,
             cast(date, self._issue_date.date().toPython()),
@@ -335,21 +320,24 @@ class InvoiceEditorDialog(QDialog):
         )
         return self._invoice
 
+    def _update_existing(self) -> Invoice | None:
+        return self._prepare_invoice()
+
     def _save_draft(self) -> None:
-        self._invoice = self._create_invoice()
-        if self._invoice:
+        invoice = self._prepare_invoice()
+        if invoice:
             self._context.session.commit()
-            QMessageBox.information(self, "Draft saved", f"Saved draft ID {self._invoice.id}")
+            QMessageBox.information(self, "Draft saved", f"Saved {invoice.number}")
             self.accept()
 
     def _issue(self) -> None:
-        invoice = self._create_invoice()
+        invoice = self._prepare_invoice()
         if invoice is None:
             return
-        self._context.invoice_service.issue(invoice)
+        if invoice.is_draft:
+            self._context.invoice_service.issue(invoice)
         self._context.session.commit()
         self._generate_pdf(invoice)
-        self._invoice = invoice
         self.accept()
 
     def _update(self) -> None:

@@ -194,14 +194,48 @@ class InvoiceService:
             raise InvoiceServiceError("Invoice is already issued")
         if not invoice.items:
             raise InvoiceServiceError("Cannot issue an invoice with no line items")
-        number = self._numbering.reserve("invoice")
-        invoice.number = number
-        invoice.sequence_number = int(number.split("-")[1])
+        if invoice.number == "DRAFT":
+            number = self._numbering.reserve("invoice")
+            invoice.number = number
+            invoice.sequence_number = int(number.split("-")[1])
+        else:
+            # Re-issuing a previously issued (retracted) invoice; keep the number
+            # but make sure the numbering service does not reuse it.
+            parsed = parse_number(invoice.number)
+            if parsed:
+                _, seq = parsed
+                current = int(self._numbering.peek("invoice").split("-", 1)[1])
+                if seq >= current:
+                    self._numbering.set_next("invoice", seq + 1)
+                invoice.sequence_number = seq
         invoice.is_draft = False
         invoice.status = "issued"
         self._persist_numbering()
         self._update_status(invoice)
-        self._audit.record("invoice_issued", "invoices", invoice.id, {"number": number})
+        self._audit.record("invoice_issued", "invoices", invoice.id, {"number": invoice.number})
+        return invoice
+
+    def reissue(self, invoice: Invoice) -> Invoice:
+        """Issue or re-issue an invoice that has a number assigned."""
+        if not invoice.is_draft:
+            raise InvoiceServiceError("Invoice is already issued")
+        if invoice.number == "DRAFT":
+            raise InvoiceServiceError("Invoice has no number to reissue")
+        if invoice.is_void or invoice.is_cancelled:
+            raise InvoiceServiceError("Cannot reissue void or cancelled invoice")
+        return self.issue(invoice)
+
+    def retract(self, invoice: Invoice) -> Invoice:
+        """Revert an issued invoice to draft so it can be edited."""
+        if invoice.is_draft:
+            raise InvoiceServiceError("Invoice is already a draft")
+        if invoice.is_void or invoice.is_cancelled:
+            raise InvoiceServiceError("Cannot retract void or cancelled invoice")
+        if any(p for p in invoice.payments if not p.is_reversed) or invoice.credits:
+            raise InvoiceServiceError("Cannot retract an invoice with payments or credits")
+        invoice.is_draft = True
+        invoice.status = "draft"
+        self._audit.record("invoice_retracted", "invoices", invoice.id, {"number": invoice.number})
         return invoice
 
     def cancel(self, invoice: Invoice, reason: str) -> Invoice:
