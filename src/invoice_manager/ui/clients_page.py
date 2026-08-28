@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+from datetime import date
+
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QDialog,
@@ -19,7 +22,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from invoice_manager.persistence.models import Client
+from invoice_manager.documents.client_statement_pdf import generate_client_statement_pdf
+from invoice_manager.persistence.models import Client, Invoice
 from invoice_manager.ui.app_context import AppContext
 
 
@@ -127,8 +131,11 @@ class ClientsPage(QWidget):
         edit_btn.clicked.connect(self._edit_client)
         delete_btn = QPushButton("Delete")
         delete_btn.clicked.connect(self._delete_client)
+        statement_btn = QPushButton("Statement")
+        statement_btn.clicked.connect(self._client_statement)
         action_bar.addWidget(edit_btn)
         action_bar.addWidget(delete_btn)
+        action_bar.addWidget(statement_btn)
         action_bar.addStretch()
         layout.addLayout(action_bar)
 
@@ -177,3 +184,41 @@ class ClientsPage(QWidget):
         client.is_deleted = True
         self._context.session.commit()
         self.refresh()
+
+    def _client_statement(self) -> None:
+        client = self._selected_client()
+        if client is None:
+            QMessageBox.information(self, "Select client", "Select a client for statement.")
+            return
+        invoices = list(
+            self._context.session.query(Invoice)
+            .filter(Invoice.client_id == client.id)
+            .order_by(Invoice.issue_date)
+            .all()
+        )
+        if not invoices:
+            QMessageBox.information(self, "No invoices", "This client has no invoices.")
+            return
+        settings = {
+            k: self._context.setting_repo.get(k)
+            for k in [
+                "business_name",
+                "currency_symbol",
+                "report_header_colour",
+                "report_accent_colour",
+                "report_stripe_colour",
+            ]
+        }
+        output = (
+            self._context.config.get_data_directory()
+            / "documents"
+            / "statements"
+            / f"client_{client.id}"
+            / f"statement_{date.today().isoformat()}.pdf"
+        )
+        try:
+            generate_client_statement_pdf(client, invoices, settings, output)
+            QMessageBox.information(self, "Statement", f"Saved {output}")
+            os.startfile(str(output))
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Statement failed", str(exc))
