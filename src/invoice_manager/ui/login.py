@@ -62,10 +62,8 @@ class LoginDialog(QDialog):
 
         form = QFormLayout()
         self._username = QLineEdit()
-        self._username.setPlaceholderText("admin")
         self._password = QLineEdit()
         self._password.setEchoMode(QLineEdit.EchoMode.Password)
-        self._password.setPlaceholderText("Admin")
         form.addRow("Username:", self._username)
         form.addRow("Password:", self._password)
         layout.addLayout(form)
