@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -58,6 +58,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Invoice & Receipt Manager")
         self.setMinimumSize(1200, 800)
         self._build_ui()
+        self._start_backup_scheduler()
 
     def _build_ui(self) -> None:
         central = QWidget()
@@ -162,13 +163,45 @@ class MainWindow(QMainWindow):
             if isinstance(invoices_page, InvoiceListPage):
                 invoices_page.refresh()
 
+    def _start_backup_scheduler(self) -> None:
+        self._backup_if_due()
+        self._backup_timer = QTimer(self)
+        self._backup_timer.timeout.connect(self._backup_if_due)
+        self._backup_timer.start(15 * 60 * 1000)
+
+    def _backup_if_due(self) -> None:
+        try:
+            service = BackupService(
+                self._context.config.get_data_directory(),
+                self._context.config.get_backup_directory(),
+                self._context.setting_repo,
+            )
+            if service.backup_if_due():
+                _log.info("Scheduled backup completed")
+        except Exception:  # noqa: BLE001
+            _log.exception("Scheduled backup failed")
+
+    def _backup_on_exit(self) -> None:
+        try:
+            service = BackupService(
+                self._context.config.get_data_directory(),
+                self._context.config.get_backup_directory(),
+                self._context.setting_repo,
+            )
+            if service.backup_on_exit():
+                _log.info("Exit backup completed")
+        except Exception:  # noqa: BLE001
+            _log.exception("Exit backup failed")
+
     def _backup_now(self) -> None:
         try:
             service = BackupService(
                 self._context.config.get_data_directory(),
                 self._context.config.get_backup_directory(),
+                self._context.setting_repo,
             )
             path = service.backup()
+            service.prune()
             QMessageBox.information(self, "Backup complete", f"Saved: {path}")
         except BackupServiceError as exc:
             QMessageBox.warning(self, "Backup failed", str(exc))
@@ -201,6 +234,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Restore failed", str(exc))
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
+        self._backup_on_exit()
         self._context.session.close()
         self._context.database.engine.dispose()
         event.accept()

@@ -8,6 +8,7 @@ import tempfile
 import zipfile
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 
 class BackupServiceError(Exception):
@@ -19,17 +20,35 @@ class BackupService:
 
     MANIFEST_NAME = "backup_manifest.json"
 
-    def __init__(self, data_dir: Path, backup_dir: Path) -> None:
+    def __init__(
+        self,
+        data_dir: Path,
+        backup_dir: Path,
+        setting_repo: Any | None = None,
+    ) -> None:
         self.data_dir = Path(data_dir)
         self.backup_dir = Path(backup_dir)
+        self._settings = setting_repo
         self.backup_dir.mkdir(parents=True, exist_ok=True)
 
-    def backup(self) -> Path:
+    def _resolve_backup_dir(self) -> Path:
+        if self._settings is None:
+            return self.backup_dir
+        custom = self._settings.get("backup_folder") or ""
+        if custom:
+            path = Path(custom)
+            path.mkdir(parents=True, exist_ok=True)
+            return path
+        return self.backup_dir
+
+    def backup(self, backup_dir: Path | None = None) -> Path:
         """Zip the data directory and return the archive path."""
         if not self.data_dir.exists():
             raise BackupServiceError(f"Data directory not found: {self.data_dir}")
+        target = Path(backup_dir) if backup_dir else self._resolve_backup_dir()
+        target.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        archive = self.backup_dir / f"invoice_manager_backup_{timestamp}.zip"
+        archive = target / f"invoice_manager_backup_{timestamp}.zip"
 
         with tempfile.TemporaryDirectory() as tmp:
             manifest_path = Path(tmp) / self.MANIFEST_NAME
@@ -47,6 +66,69 @@ class BackupService:
                         arcname = f"data/{path.relative_to(self.data_dir)}"
                         zf.write(path, arcname)
         return archive
+
+    def prune(self, target: Path | None = None) -> int:
+        """Delete oldest backups beyond the keep count."""
+        directory = target or self._resolve_backup_dir()
+        keep = 30
+        if self._settings is not None:
+            try:
+                keep = int(self._settings.get("backup_keep") or 30)
+            except ValueError:
+                keep = 30
+        archives = sorted(
+            directory.glob("invoice_manager_backup_*.zip"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        removed = 0
+        for old in archives[keep:]:
+            try:
+                old.unlink()
+                removed += 1
+            except OSError:
+                pass
+        return removed
+
+    def backup_if_due(self) -> bool:
+        """Run a scheduled backup if one is due according to settings."""
+        if self._settings is None:
+            return False
+        if self._settings.get("backup_enabled") != "1":
+            return False
+        try:
+            frequency = int(self._settings.get("backup_frequency_hours") or 24)
+        except ValueError:
+            frequency = 24
+
+        last = self._settings.get("last_backup_timestamp")
+        last_time: datetime | None = None
+        if last:
+            try:
+                last_time = datetime.fromisoformat(last)
+            except ValueError:
+                last_time = None
+
+        now = datetime.now()
+        if last_time and (now - last_time).total_seconds() < frequency * 3600:
+            return False
+
+        target = self._resolve_backup_dir()
+        self.backup(target)
+        self.prune(target)
+        self._settings.set("last_backup_timestamp", now.isoformat())
+        return True
+
+    def backup_on_exit(self) -> bool:
+        """Run a backup on application exit if configured."""
+        if self._settings is None:
+            return False
+        if self._settings.get("backup_on_exit") != "1":
+            return False
+        target = self._resolve_backup_dir()
+        self.backup(target)
+        self.prune(target)
+        return True
 
     def restore(self, archive: Path) -> None:
         """Restore the data directory from a backup archive."""
