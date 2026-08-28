@@ -1,0 +1,1 @@
+"""Pure financial-domain rules."""

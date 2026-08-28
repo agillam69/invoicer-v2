@@ -11,3 +11,5 @@ Accepted decisions from build specification Part L:
 7. Keep `0001-1` and `ERROR` only as migration issues, never financial records.
 8. Import the current setting as not GST registered; documents say `INVOICE`.
 9. Use GST-exclusive price entry by default.
+10. Overdue takes precedence over Part Paid whenever a positive balance remains past the due date.
+11. An invoice cleared by a mix of payments and credits is Paid; Credited is reserved for balances cleared purely by credits.

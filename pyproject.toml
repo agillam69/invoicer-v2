@@ -75,3 +75,4 @@ markers = [
   "e2e: end-to-end acceptance tests",
 ]
 addopts = "--cov=invoice_manager --cov-report=term-missing"
+filterwarnings = ["error"]
