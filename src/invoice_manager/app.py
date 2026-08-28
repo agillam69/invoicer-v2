@@ -35,3 +35,7 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001
         log.exception("Fatal error during startup: %s", exc)
         return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
