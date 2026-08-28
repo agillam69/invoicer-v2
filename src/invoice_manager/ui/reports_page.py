@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import csv
 from collections import defaultdict
 from datetime import date
+from pathlib import Path
 from typing import cast
 
 from PySide6.QtWidgets import (
+    QFileDialog,
     QHBoxLayout,
     QLabel,
     QPlainTextEdit,
@@ -15,6 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from invoice_manager.documents.invoice_pdf import generate_report_pdf
 from invoice_manager.persistence.models import Invoice, LedgerEntry
 from invoice_manager.ui.app_context import AppContext
 
@@ -35,7 +39,13 @@ class ReportsPage(QWidget):
         toolbar = QHBoxLayout()
         refresh_btn = QPushButton("Refresh")
         refresh_btn.clicked.connect(self._generate_all)
+        export_csv_btn = QPushButton("Export CSV")
+        export_csv_btn.clicked.connect(self._export_csv)
+        export_pdf_btn = QPushButton("Export PDF")
+        export_pdf_btn.clicked.connect(self._export_pdf)
         toolbar.addWidget(refresh_btn)
+        toolbar.addWidget(export_csv_btn)
+        toolbar.addWidget(export_pdf_btn)
         toolbar.addStretch()
         layout.addLayout(toolbar)
 
@@ -113,3 +123,51 @@ class ReportsPage(QWidget):
         lines.append(f"GST collected (invoices): ${gst_collected / 100:.2f}")
         lines.append("GST paid (expenses): not yet tracked")
         return lines
+
+    def _report_lines(self) -> list[str]:
+        return self._output.toPlainText().splitlines()
+
+    def _export_csv(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export report CSV",
+            str(self._context.config.get_exports_directory() / "report.csv"),
+            "CSV files (*.csv)",
+        )
+        if not path:
+            return
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                for line in self._report_lines():
+                    if ":" in line:
+                        label, value = line.split(":", 1)
+                        writer.writerow([label.strip(), value.strip()])
+                    else:
+                        writer.writerow([line])
+            self._context.audit.record(
+                "report_exported", "reports", None, {"path": path, "format": "csv"}
+            )
+        except Exception as exc:  # noqa: BLE001
+            from PySide6.QtWidgets import QMessageBox
+
+            QMessageBox.warning(self, "Export failed", str(exc))
+
+    def _export_pdf(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export report PDF",
+            str(self._context.config.get_exports_directory() / "report.pdf"),
+            "PDF files (*.pdf)",
+        )
+        if not path:
+            return
+        try:
+            generate_report_pdf("Business Report", self._report_lines(), Path(path))
+            self._context.audit.record(
+                "report_exported", "reports", None, {"path": path, "format": "pdf"}
+            )
+        except Exception as exc:  # noqa: BLE001
+            from PySide6.QtWidgets import QMessageBox
+
+            QMessageBox.warning(self, "Export failed", str(exc))

@@ -132,6 +132,9 @@ class ServiceItemRepository:
         self._session.flush()
         return item
 
+    def get(self, item_id: int) -> ServiceItem | None:
+        return self._session.get(ServiceItem, item_id)
+
     def list_active(self) -> list[ServiceItem]:
         return list(
             self._session.query(ServiceItem)

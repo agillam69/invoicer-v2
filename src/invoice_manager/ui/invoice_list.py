@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 from invoice_manager.persistence.models import Invoice
 from invoice_manager.ui.app_context import AppContext
 from invoice_manager.ui.invoice_editor import InvoiceEditorDialog
+from invoice_manager.ui.manual_invoice_dialog import ManualInvoiceDialog
 
 
 class InvoiceListPage(QWidget):
@@ -40,9 +41,12 @@ class InvoiceListPage(QWidget):
         toolbar = QHBoxLayout()
         new_btn = QPushButton("New Invoice")
         new_btn.clicked.connect(self._new_invoice)
+        manual_btn = QPushButton("Record Manual Invoice")
+        manual_btn.clicked.connect(self._record_manual)
         refresh_btn = QPushButton("Refresh")
         refresh_btn.clicked.connect(self.refresh)
         toolbar.addWidget(new_btn)
+        toolbar.addWidget(manual_btn)
         toolbar.addWidget(refresh_btn)
         toolbar.addStretch()
         layout.addLayout(toolbar)
@@ -103,5 +107,10 @@ class InvoiceListPage(QWidget):
 
     def _new_invoice(self) -> None:
         dlg = InvoiceEditorDialog(self._context, parent=self)
+        if dlg.exec() == 1:
+            self.refresh()
+
+    def _record_manual(self) -> None:
+        dlg = ManualInvoiceDialog(self._context, parent=self)
         if dlg.exec() == 1:
             self.refresh()

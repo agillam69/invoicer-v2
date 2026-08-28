@@ -9,7 +9,7 @@ from typing import cast
 
 from invoice_manager.domain.invoices import InvoiceTotals, calculate_line_total
 from invoice_manager.domain.money import Money
-from invoice_manager.domain.numbering import NumberingService
+from invoice_manager.domain.numbering import NumberingService, parse_number
 from invoice_manager.domain.statuses import derive_invoice_status
 from invoice_manager.infrastructure.audit import AuditService
 from invoice_manager.persistence.models import Client, Invoice, InvoiceItem, Payment
@@ -235,6 +235,86 @@ class InvoiceService:
             .order_by(Invoice.issue_date.desc(), Invoice.sequence_number.desc())
             .all()
         )
+
+    def record_manual_invoice(
+        self,
+        number: str,
+        client_name: str,
+        client_address: str | None,
+        issue_date: date,
+        due_date: date,
+        subtotal_cents: int,
+        gst_cents: int,
+        total_cents: int,
+        notes: str | None = None,
+        paid: bool = False,
+        paid_date: date | None = None,
+        payment_note: str | None = None,
+    ) -> Invoice:
+        """Record a historical invoice that was created outside the system."""
+        number = number.strip()
+        if not number:
+            raise InvoiceServiceError("Invoice number is required")
+        if self._invoice_repo.get_by_number(number):
+            raise InvoiceServiceError(f"Invoice number {number} already exists")
+
+        client = self._client_repo.get_by_name(client_name)
+        client_id = client.id if client else None
+        client_address = client_address or (client.address if client else None)
+
+        parsed = parse_number(number)
+        sequence = 0
+        if parsed:
+            _, sequence = parsed
+            current = int(self._numbering.peek("invoice").split("-", 1)[1])
+            if sequence >= current:
+                self._numbering.set_next("invoice", sequence + 1)
+
+        invoice = self._invoice_repo.create(
+            number=number,
+            sequence_number=sequence,
+            issue_date=issue_date,
+            due_date=due_date,
+            client_id=client_id,
+            client_name=client_name,
+            client_address=client_address,
+            reference=None,
+            notes=notes,
+            subtotal_cents=subtotal_cents,
+            gst_cents=gst_cents,
+            total_cents=total_cents,
+            status="issued",
+            is_draft=False,
+            is_void=False,
+            is_cancelled=False,
+        )
+
+        if paid and total_cents > 0:
+            payment = self._payment_repo.create(
+                invoice_id=invoice.id,
+                amount_cents=total_cents,
+                date=paid_date or issue_date,
+                method="",
+                reference=payment_note,
+                notes=payment_note,
+                is_reversed=False,
+            )
+            invoice.payments.append(payment)
+
+        self._persist_numbering()
+        self._update_status(invoice)
+        self._audit.record(
+            "manual_invoice_recorded",
+            "invoices",
+            invoice.id,
+            {"number": number, "client": client_name},
+        )
+        return invoice
+
+    def set_next_invoice_number(self, value: int) -> None:
+        """Adjust the next invoice number to be used for new issues."""
+        self._numbering.set_next("invoice", max(1, value))
+        self._persist_numbering()
 
     @staticmethod
     def totals_for_display(invoice: Invoice) -> InvoiceTotals:

@@ -33,6 +33,7 @@ from invoice_manager.ui.migration_wizard import MigrationWizard
 from invoice_manager.ui.payments_page import PaymentsPage
 from invoice_manager.ui.reports_page import ReportsPage
 from invoice_manager.ui.service_items_page import ServiceItemsPage
+from invoice_manager.ui.settings_dialog import SettingsDialog
 
 _log = get_logger("invoice_manager.ui.main_window")
 
@@ -141,11 +142,18 @@ class MainWindow(QMainWindow):
         backup_action.triggered.connect(self._backup_now)
         restore_action = tools_menu.addAction("Restore from backup...")
         restore_action.triggered.connect(self._restore_backup)
+        tools_menu.addSeparator()
+        settings_action = tools_menu.addAction("Settings")
+        settings_action.triggered.connect(self._open_settings)
         self.setMenuBar(menu_bar)
 
     def _open_migration_wizard(self) -> None:
         wizard = MigrationWizard(self._config, parent=self)
         wizard.exec()
+
+    def _open_settings(self) -> None:
+        dlg = SettingsDialog(self._context, parent=self)
+        dlg.exec()
 
     def _open_new_invoice(self) -> None:
         dlg = InvoiceEditorDialog(self._context, parent=self)

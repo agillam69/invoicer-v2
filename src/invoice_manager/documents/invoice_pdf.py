@@ -131,3 +131,35 @@ class InvoicePDFBuilder:
 
 def generate_invoice_pdf(invoice: Invoice, settings: dict[str, Any], output_path: Path) -> Path:
     return InvoicePDFBuilder(invoice, settings).build(output_path)
+
+
+class ReportPDFBuilder:
+    """Build a simple PDF from the textual report output."""
+
+    def __init__(self, title: str, lines: list[str]) -> None:
+        self.title = title
+        self.lines = lines
+
+    def build(self, output_path: Path) -> Path:
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        doc = SimpleDocTemplate(
+            str(output_path),
+            pagesize=A4,
+            rightMargin=20 * mm,
+            leftMargin=20 * mm,
+            topMargin=20 * mm,
+            bottomMargin=20 * mm,
+        )
+        styles = getSampleStyleSheet()
+        story: list[Any] = []
+        story.append(Paragraph(f"<b>{self.title}</b>", styles["Title"]))
+        story.append(Spacer(1, 6 * mm))
+        for line in self.lines:
+            story.append(Paragraph(line or " ", styles["Normal"]))
+        doc.build(story)
+        return output_path
+
+
+def generate_report_pdf(title: str, lines: list[str], output_path: Path) -> Path:
+    return ReportPDFBuilder(title, lines).build(output_path)

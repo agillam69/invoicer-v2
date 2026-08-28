@@ -44,6 +44,7 @@ class InvoiceEditorDialog(QDialog):
         self._clients: list[Client] = []
         self._build_ui()
         self._load_clients()
+        self._load_services()
         self._table.itemChanged.connect(self._recalc)
 
     def _build_ui(self) -> None:
@@ -67,6 +68,18 @@ class InvoiceEditorDialog(QDialog):
         self._notes = QTextEdit()
         self._notes.setMaximumHeight(60)
         form.addRow("Notes:", self._notes)
+
+        service_widget = QWidget()
+        service_layout = QHBoxLayout(service_widget)
+        service_layout.setContentsMargins(0, 0, 0, 0)
+        self._service_combo = QComboBox()
+        self._service_combo.addItem("-- select a service --", 0)
+        service_layout.addWidget(self._service_combo, stretch=1)
+        add_service_btn = QPushButton("Add to invoice")
+        add_service_btn.clicked.connect(self._add_service_line)
+        service_layout.addWidget(add_service_btn)
+        form.addRow("Service:", service_widget)
+
         layout.addLayout(form)
 
         layout.addWidget(QLabel("Line items"))
@@ -118,23 +131,48 @@ class InvoiceEditorDialog(QDialog):
             self._update_due_date()
         self._issue_date.dateChanged.connect(self._update_due_date)
 
+    def _load_services(self) -> None:
+        for item in self._context.service_repo.list_active():
+            self._service_combo.addItem(item.description, item.id)
+
     def _update_due_date(self) -> None:
         terms = int(self._context.setting_repo.get("payment_terms_days") or 7)
         self._due_date.setDate(self._issue_date.date().addDays(terms))
 
-    def _add_line(self) -> None:
+    def _add_line(
+        self,
+        description: str = "Service",
+        quantity: int = 1,
+        unit_price_cents: int = 0,
+        taxable: bool = True,
+    ) -> None:
         row = self._table.rowCount()
         self._table.insertRow(row)
-        self._table.setItem(row, 0, QTableWidgetItem("Service"))
-        self._table.setItem(row, 1, QTableWidgetItem("1"))
-        self._table.setItem(row, 2, QTableWidgetItem("0.00"))
+        self._table.setItem(row, 0, QTableWidgetItem(description))
+        self._table.setItem(row, 1, QTableWidgetItem(str(quantity)))
+        self._table.setItem(row, 2, QTableWidgetItem(f"{unit_price_cents / 100:.2f}"))
         chk = QTableWidgetItem()
         chk.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
-        chk.setCheckState(Qt.CheckState.Checked)
+        chk.setCheckState(Qt.CheckState.Checked if taxable else Qt.CheckState.Unchecked)
         self._table.setItem(row, 3, chk)
         self._table.setItem(row, 4, QTableWidgetItem("0.00"))
         self._table.setItem(row, 5, QTableWidgetItem("$0.00"))
         self._recalc()
+
+    def _add_service_line(self) -> None:
+        service_id = self._service_combo.currentData()
+        if service_id is None or service_id == 0:
+            return
+        item = self._context.service_repo.get(int(service_id))
+        if item is None:
+            return
+        self._add_line(
+            description=item.description,
+            quantity=1,
+            unit_price_cents=item.unit_price_cents,
+            taxable=item.taxable,
+        )
+        self._service_combo.setCurrentIndex(0)
 
     def _remove_line(self) -> None:
         rows = sorted({idx.row() for idx in self._table.selectedIndexes()}, reverse=True)

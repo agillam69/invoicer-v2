@@ -101,6 +101,11 @@ class PaymentService:
         self._audit.record("payment_reversed", "payments", payment.id, {"reason": reason})
         return payment
 
+    def set_next_receipt_number(self, value: int) -> None:
+        """Adjust the next receipt number."""
+        self._numbering.set_next("receipt", max(1, value))
+        self._persist_numbering()
+
     def _update_invoice_status(self, invoice: Invoice) -> None:
         total_paid = sum(p.amount_cents for p in invoice.payments if not p.is_reversed)
         balance = invoice.total_cents - total_paid
