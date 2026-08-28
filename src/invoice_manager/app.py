@@ -14,6 +14,15 @@ def main() -> int:
     setup_logging(config.logs_dir)
     log = get_logger("invoice_manager.app")
 
+    lock = None
+    if sys.platform == "win32":
+        from invoice_manager.infrastructure.instance_lock import InstanceLock
+
+        lock = InstanceLock()
+        if not lock.acquire():
+            log.warning("Another instance is already running")
+            return 0
+
     try:
         from PySide6.QtWidgets import QApplication
 
@@ -35,6 +44,9 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001
         log.exception("Fatal error during startup: %s", exc)
         return 1
+    finally:
+        if lock is not None:
+            lock.release()
 
 
 if __name__ == "__main__":
