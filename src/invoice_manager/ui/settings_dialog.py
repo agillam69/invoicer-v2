@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSpinBox,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -57,7 +58,9 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(self)
         self.setMinimumWidth(550)
 
-        # Business group
+        tabs = QTabWidget()
+
+        # Business tab
         biz_group = QGroupBox("Business")
         biz_form = QFormLayout()
         for key in self._STRING_KEYS:
@@ -76,9 +79,9 @@ class SettingsDialog(QDialog):
         self._next_receipt.setRange(1, 999999)
         biz_form.addRow("Next receipt number:", self._next_receipt)
         biz_group.setLayout(biz_form)
-        layout.addWidget(biz_group)
+        tabs.addTab(biz_group, "Business")
 
-        # Reports / PDF group
+        # Reports / PDF tab
         report_group = QGroupBox("Reports & PDF")
         report_form = QFormLayout()
         self._report_header_colour = QLineEdit()
@@ -93,9 +96,9 @@ class SettingsDialog(QDialog):
         self._pdf_save_mode.addItems(["Auto", "Prompt"])
         report_form.addRow("PDF save mode:", self._pdf_save_mode)
         report_group.setLayout(report_form)
-        layout.addWidget(report_group)
+        tabs.addTab(report_group, "Reports")
 
-        # Backup group
+        # Backup tab
         backup_group = QGroupBox("Backup")
         backup_form = QFormLayout()
         self._backup_enabled = QCheckBox("Enable scheduled backups")
@@ -116,11 +119,12 @@ class SettingsDialog(QDialog):
         backup_row.addWidget(backup_browse)
         backup_form.addRow("Backup folder:", backup_row)
         backup_group.setLayout(backup_form)
-        layout.addWidget(backup_group)
+        tabs.addTab(backup_group, "Backup")
 
-        # Data directory group
-        data_group = QGroupBox("Data directory")
+        # Data / Setup tab
+        data_group = QGroupBox("Data & Setup")
         data_form = QFormLayout()
+
         self._data_dir = QLineEdit()
         self._data_dir.setReadOnly(True)
         browse_btn = QPushButton("Browse...")
@@ -132,9 +136,30 @@ class SettingsDialog(QDialog):
         data_row.addWidget(browse_btn)
         data_row.addWidget(onedrive_btn)
         data_form.addRow("Data folder:", data_row)
-        data_form.addRow(QLabel("Changing this requires a restart to take effect."))
+
+        self._database_path = QLineEdit()
+        self._database_path.setReadOnly(True)
+        open_db_btn = QPushButton("Open database location")
+        open_db_btn.clicked.connect(self._open_database_location)
+        db_row = QHBoxLayout()
+        db_row.addWidget(self._database_path)
+        db_row.addWidget(open_db_btn)
+        data_form.addRow("Database file:", db_row)
+
+        self._migration_source = QLineEdit()
+        self._migration_source.setReadOnly(True)
+        open_source_btn = QPushButton("Open source folder")
+        open_source_btn.clicked.connect(self._open_migration_source)
+        source_row = QHBoxLayout()
+        source_row.addWidget(self._migration_source)
+        source_row.addWidget(open_source_btn)
+        data_form.addRow("Migration / CSV source:", source_row)
+
+        data_form.addRow(QLabel("Changing data folders requires a restart to take effect."))
         data_group.setLayout(data_form)
-        layout.addWidget(data_group)
+        tabs.addTab(data_group, "Data")
+
+        layout.addWidget(tabs)
 
         bbox = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
@@ -169,6 +194,8 @@ class SettingsDialog(QDialog):
         self._backup_folder.setText(settings.get("backup_folder") or "")
 
         self._data_dir.setText(str(self._context.config.get_data_directory()))
+        self._database_path.setText(str(self._context.config.db_path()))
+        self._migration_source.setText(settings.get("migration_source_dir") or "")
 
     def _save(self) -> None:
         settings = self._context.setting_repo
@@ -229,3 +256,21 @@ class SettingsDialog(QDialog):
         )
         if path:
             self._backup_folder.setText(path)
+
+    def _open_database_location(self) -> None:
+        path = Path(self._database_path.text())
+        if not path.exists():
+            QMessageBox.warning(self, "Not found", f"Database file not found: {path}")
+            return
+        os.startfile(str(path.parent))
+
+    def _open_migration_source(self) -> None:
+        source = self._migration_source.text().strip()
+        if not source:
+            QMessageBox.information(self, "No source", "No migration source is recorded.")
+            return
+        path = Path(source)
+        if not path.exists():
+            QMessageBox.warning(self, "Not found", f"Source folder not found: {path}")
+            return
+        os.startfile(str(path))

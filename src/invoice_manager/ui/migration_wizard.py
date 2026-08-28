@@ -93,9 +93,10 @@ class MigrationWizard(QDialog):
             db.create_schema()
             session = db.new_session()
             file_store = FileStore(self._config.get_data_directory())
+            setting_repo = SettingRepository(session)
             service = MigrationService(
                 source_dir=source,
-                setting_repo=SettingRepository(session),
+                setting_repo=setting_repo,
                 client_repo=ClientRepository(session),
                 service_repo=ServiceItemRepository(session),
                 invoice_repo=InvoiceRepository(session),
@@ -106,6 +107,7 @@ class MigrationWizard(QDialog):
                 payment_terms_days=int(self._terms.text() or 7),
             )
             counts = service.run()
+            setting_repo.set("migration_source_dir", str(source))
             session.commit()
             self._log.appendPlainText(f"Imported: {counts}")
             self._log.appendPlainText(f"Issues: {service._issue_count}")
