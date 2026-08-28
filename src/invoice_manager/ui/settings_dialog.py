@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
+import os
 from decimal import Decimal
+from pathlib import Path
 
 from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
     QLineEdit,
     QMessageBox,
+    QPushButton,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -46,29 +55,86 @@ class SettingsDialog(QDialog):
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
-        form = QFormLayout()
+        self.setMinimumWidth(550)
 
+        # Business group
+        biz_group = QGroupBox("Business")
+        biz_form = QFormLayout()
         for key in self._STRING_KEYS:
             edit = QLineEdit()
-            form.addRow(self._label(key), edit)
+            biz_form.addRow(self._label(key), edit)
             self._fields[key] = edit
-
         self._gst_rate = QLineEdit()
-        form.addRow("GST rate (e.g. 0.10):", self._gst_rate)
-
+        biz_form.addRow("GST rate (e.g. 0.10):", self._gst_rate)
         self._payment_terms = QSpinBox()
         self._payment_terms.setRange(0, 365)
-        form.addRow("Payment terms (days):", self._payment_terms)
-
+        biz_form.addRow("Payment terms (days):", self._payment_terms)
         self._next_invoice = QSpinBox()
         self._next_invoice.setRange(1, 999999)
-        form.addRow("Next invoice number:", self._next_invoice)
-
+        biz_form.addRow("Next invoice number:", self._next_invoice)
         self._next_receipt = QSpinBox()
         self._next_receipt.setRange(1, 999999)
-        form.addRow("Next receipt number:", self._next_receipt)
+        biz_form.addRow("Next receipt number:", self._next_receipt)
+        biz_group.setLayout(biz_form)
+        layout.addWidget(biz_group)
 
-        layout.addLayout(form)
+        # Reports / PDF group
+        report_group = QGroupBox("Reports & PDF")
+        report_form = QFormLayout()
+        self._report_header_colour = QLineEdit()
+        report_form.addRow("Report header colour (hex):", self._report_header_colour)
+        self._report_accent_colour = QLineEdit()
+        report_form.addRow("Report accent colour (hex):", self._report_accent_colour)
+        self._report_stripe_colour = QLineEdit()
+        report_form.addRow("Report stripe colour (hex):", self._report_stripe_colour)
+        self._report_footer = QLineEdit()
+        report_form.addRow("Report footer:", self._report_footer)
+        self._pdf_save_mode = QComboBox()
+        self._pdf_save_mode.addItems(["Auto", "Prompt"])
+        report_form.addRow("PDF save mode:", self._pdf_save_mode)
+        report_group.setLayout(report_form)
+        layout.addWidget(report_group)
+
+        # Backup group
+        backup_group = QGroupBox("Backup")
+        backup_form = QFormLayout()
+        self._backup_enabled = QCheckBox("Enable scheduled backups")
+        backup_form.addRow(self._backup_enabled)
+        self._backup_frequency = QSpinBox()
+        self._backup_frequency.setRange(1, 168)
+        backup_form.addRow("Frequency (hours):", self._backup_frequency)
+        self._backup_keep = QSpinBox()
+        self._backup_keep.setRange(1, 365)
+        backup_form.addRow("Keep count:", self._backup_keep)
+        self._backup_on_exit = QCheckBox("Backup on exit")
+        backup_form.addRow(self._backup_on_exit)
+        self._backup_folder = QLineEdit()
+        backup_browse = QPushButton("Browse...")
+        backup_browse.clicked.connect(self._browse_backup_folder)
+        backup_row = QHBoxLayout()
+        backup_row.addWidget(self._backup_folder)
+        backup_row.addWidget(backup_browse)
+        backup_form.addRow("Backup folder:", backup_row)
+        backup_group.setLayout(backup_form)
+        layout.addWidget(backup_group)
+
+        # Data directory group
+        data_group = QGroupBox("Data directory")
+        data_form = QFormLayout()
+        self._data_dir = QLineEdit()
+        self._data_dir.setReadOnly(True)
+        browse_btn = QPushButton("Browse...")
+        browse_btn.clicked.connect(self._browse_data_dir)
+        onedrive_btn = QPushButton("Use OneDrive")
+        onedrive_btn.clicked.connect(self._use_onedrive)
+        data_row = QHBoxLayout()
+        data_row.addWidget(self._data_dir)
+        data_row.addWidget(browse_btn)
+        data_row.addWidget(onedrive_btn)
+        data_form.addRow("Data folder:", data_row)
+        data_form.addRow(QLabel("Changing this requires a restart to take effect."))
+        data_group.setLayout(data_form)
+        layout.addWidget(data_group)
 
         bbox = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
@@ -88,6 +154,21 @@ class SettingsDialog(QDialog):
         self._payment_terms.setValue(settings.get_int("payment_terms_days", 7))
         self._next_invoice.setValue(settings.get_int("next_invoice_number", 1))
         self._next_receipt.setValue(settings.get_int("next_receipt_number", 1))
+
+        self._report_header_colour.setText(settings.get("report_header_colour") or "#2C3E50")
+        self._report_accent_colour.setText(settings.get("report_accent_colour") or "#2980B9")
+        self._report_stripe_colour.setText(settings.get("report_stripe_colour") or "#EBF5FB")
+        self._report_footer.setText(settings.get("report_footer") or "")
+        pdf_mode = settings.get("pdf_save_mode") or "Auto"
+        self._pdf_save_mode.setCurrentText(pdf_mode if pdf_mode in ("Auto", "Prompt") else "Auto")
+
+        self._backup_enabled.setChecked(settings.get("backup_enabled") == "1")
+        self._backup_frequency.setValue(settings.get_int("backup_frequency_hours", 24))
+        self._backup_keep.setValue(settings.get_int("backup_keep", 30))
+        self._backup_on_exit.setChecked(settings.get("backup_on_exit") == "1")
+        self._backup_folder.setText(settings.get("backup_folder") or "")
+
+        self._data_dir.setText(str(self._context.config.get_data_directory()))
 
     def _save(self) -> None:
         settings = self._context.setting_repo
@@ -110,6 +191,37 @@ class SettingsDialog(QDialog):
         settings.set("next_invoice_number", str(self._next_invoice.value()))
         settings.set("next_receipt_number", str(self._next_receipt.value()))
 
+        settings.set("report_header_colour", self._report_header_colour.text().strip())
+        settings.set("report_accent_colour", self._report_accent_colour.text().strip())
+        settings.set("report_stripe_colour", self._report_stripe_colour.text().strip())
+        settings.set("report_footer", self._report_footer.text().strip())
+        settings.set("pdf_save_mode", self._pdf_save_mode.currentText())
+
+        settings.set("backup_enabled", "1" if self._backup_enabled.isChecked() else "0")
+        settings.set("backup_frequency_hours", str(self._backup_frequency.value()))
+        settings.set("backup_keep", str(self._backup_keep.value()))
+        settings.set("backup_on_exit", "1" if self._backup_on_exit.isChecked() else "0")
+        settings.set("backup_folder", self._backup_folder.text().strip())
+
+        new_data_dir = Path(self._data_dir.text())
+        if new_data_dir != self._context.config.get_data_directory():
+            self._context.config.set_data_directory(new_data_dir)
+
         self._context.session.commit()
         QMessageBox.information(self, "Saved", "Settings saved.")
         self.accept()
+
+    def _browse_data_dir(self) -> None:
+        path = QFileDialog.getExistingDirectory(self, "Select data directory", self._data_dir.text())
+        if path:
+            self._data_dir.setText(path)
+
+    def _use_onedrive(self) -> None:
+        onedrive = os.environ.get("ONEDRIVE") or str(Path.home() / "OneDrive")
+        target = Path(onedrive) / "InvoiceReceiptManager"
+        self._data_dir.setText(str(target))
+
+    def _browse_backup_folder(self) -> None:
+        path = QFileDialog.getExistingDirectory(self, "Select backup folder", self._backup_folder.text() or self._data_dir.text())
+        if path:
+            self._backup_folder.setText(path)
