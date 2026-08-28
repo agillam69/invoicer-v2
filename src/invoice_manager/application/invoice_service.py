@@ -12,7 +12,7 @@ from invoice_manager.domain.money import Money
 from invoice_manager.domain.numbering import NumberingService, parse_number
 from invoice_manager.domain.statuses import derive_invoice_status
 from invoice_manager.infrastructure.audit import AuditService
-from invoice_manager.persistence.models import Client, Invoice, InvoiceItem, Payment
+from invoice_manager.persistence.models import Client, CreditNote, Invoice, InvoiceItem, Payment
 from invoice_manager.persistence.repositories import (
     ClientRepository,
     InvoiceRepository,
@@ -222,6 +222,41 @@ class InvoiceService:
         self._audit.record("invoice_voided", "invoices", invoice.id, {"reason": reason})
         return invoice
 
+    def add_credit_note(
+        self,
+        invoice: Invoice,
+        amount_cents: int,
+        reason: str,
+        credit_date: date,
+    ) -> CreditNote:
+        """Apply a credit note to an issued invoice."""
+        if invoice.is_draft:
+            raise InvoiceServiceError("Cannot credit a draft invoice")
+        if invoice.is_void or invoice.is_cancelled:
+            raise InvoiceServiceError("Cannot credit a void or cancelled invoice")
+        if amount_cents <= 0:
+            raise InvoiceServiceError("Credit note amount must be positive")
+        if amount_cents > invoice.total_cents:
+            raise InvoiceServiceError("Credit note cannot exceed invoice total")
+        number = self._numbering.reserve("credit_note")
+        credit = CreditNote(
+            number=number,
+            invoice_id=invoice.id,
+            amount_cents=amount_cents,
+            date=credit_date,
+            reason=reason.strip(),
+        )
+        invoice.credits.append(credit)
+        self._persist_numbering()
+        self._update_status(invoice)
+        self._audit.record(
+            "credit_note_added",
+            "credit_notes",
+            credit.id,
+            {"invoice_id": invoice.id, "number": number, "amount_cents": amount_cents},
+        )
+        return credit
+
     def recalc(self, invoice: Invoice) -> None:
         """Recalculate totals and status for an existing invoice."""
         self._recalc(invoice)
@@ -266,7 +301,8 @@ class InvoiceService:
             .filter(Payment.invoice_id == invoice.id, Payment.is_reversed.is_(False))
             .all()
         )
-        return Money(cents=invoice.total_cents - paid)
+        credits = sum(c.amount_cents for c in invoice.credits)
+        return Money(cents=invoice.total_cents - paid - credits)
 
     def get(self, invoice_id: int) -> Invoice | None:
         return (

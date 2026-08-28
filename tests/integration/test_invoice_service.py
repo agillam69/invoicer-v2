@@ -197,3 +197,25 @@ def test_cannot_update_void_invoice(invoice_deps):
                 }
             ],
         )
+
+
+def test_credit_note_reduces_balance_and_status(invoice_deps):
+    service, client, session = invoice_deps
+    inv = service.create_draft(client.id)
+    service.add_line(inv, "Work", 1, 10000)
+    service.issue(inv)
+    service.add_credit_note(inv, 11000, "Goodwill", date.today())
+    session.refresh(inv)
+    assert inv.status == InvoiceStatus.PAID.value
+    balance = service._balance(inv).cents
+    assert balance == 0
+
+
+def test_cannot_credit_void_or_draft_invoice(invoice_deps):
+    service, client, session = invoice_deps
+    inv = service.create_draft(client.id)
+    service.add_line(inv, "Work", 1, 10000)
+    service.issue(inv)
+    service.void(inv, "Mistake")
+    with pytest.raises(InvoiceServiceError):
+        service.add_credit_note(inv, 1000, "Too late", date.today())

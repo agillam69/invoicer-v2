@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 from invoice_manager.documents.invoice_pdf import generate_invoice_pdf
 from invoice_manager.persistence.models import Invoice
 from invoice_manager.ui.app_context import AppContext
+from invoice_manager.ui.credit_note_dialog import CreditNoteDialog
 from invoice_manager.ui.invoice_editor import InvoiceEditorDialog
 from invoice_manager.ui.manual_invoice_dialog import ManualInvoiceDialog
 
@@ -69,6 +70,8 @@ class InvoiceListPage(QWidget):
         edit_btn.clicked.connect(self._edit_invoice)
         open_pdf_btn = QPushButton("Open PDF")
         open_pdf_btn.clicked.connect(self._open_pdf)
+        credit_btn = QPushButton("Credit note")
+        credit_btn.clicked.connect(self._credit_note)
         cancel_btn = QPushButton("Cancel")
         cancel_btn.clicked.connect(self._cancel_invoice)
         void_btn = QPushButton("Void")
@@ -77,6 +80,7 @@ class InvoiceListPage(QWidget):
         regen_btn.clicked.connect(self._regenerate_pdf)
         action_bar.addWidget(edit_btn)
         action_bar.addWidget(open_pdf_btn)
+        action_bar.addWidget(credit_btn)
         action_bar.addWidget(cancel_btn)
         action_bar.addWidget(void_btn)
         action_bar.addWidget(regen_btn)
@@ -142,6 +146,20 @@ class InvoiceListPage(QWidget):
             )
             return
         dlg = InvoiceEditorDialog(self._context, invoice=inv, parent=self)
+        if dlg.exec() == 1:
+            self.refresh()
+
+    def _credit_note(self) -> None:
+        inv = self._selected_invoice()
+        if inv is None:
+            QMessageBox.information(self, "Select invoice", "Select an invoice to credit.")
+            return
+        if inv.is_draft or inv.is_void or inv.is_cancelled:
+            QMessageBox.information(
+                self, "Cannot credit", "Only issued invoices can receive a credit note."
+            )
+            return
+        dlg = CreditNoteDialog(self._context, invoice=inv, parent=self)
         if dlg.exec() == 1:
             self.refresh()
 
