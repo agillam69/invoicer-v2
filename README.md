@@ -1,9 +1,7 @@
 # Invoicer V2
 
 Invoicer V2 is a Windows desktop invoice, receipt, payment, client, service,
-ledger, and reporting manager for Alexander Gillam, an Australian sole trader.
-It uses Australian conventions: `DD/MM/YYYY` on screen, ISO dates in storage,
-AUD currency, and the 1 July–30 June financial year.
+ledger, and reporting manager 
 
 ## Stack
 
