@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QInputDialog,
     QLabel,
+    QMenu,
     QMessageBox,
     QPushButton,
     QTableWidget,
@@ -27,6 +28,7 @@ from invoice_manager.ui.app_context import AppContext
 from invoice_manager.ui.credit_note_dialog import CreditNoteDialog
 from invoice_manager.ui.invoice_editor import InvoiceEditorDialog
 from invoice_manager.ui.manual_invoice_dialog import ManualInvoiceDialog
+from invoice_manager.ui.payments_page import IssueReceiptDialog, RecordPaymentDialog
 
 
 class InvoiceListPage(QWidget):
@@ -64,6 +66,8 @@ class InvoiceListPage(QWidget):
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._table.doubleClicked.connect(self._edit_invoice)
+        self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._table.customContextMenuRequested.connect(self._context_menu)
         layout.addWidget(self._table)
 
         action_bar = QHBoxLayout()
@@ -297,3 +301,48 @@ class InvoiceListPage(QWidget):
             QMessageBox.information(self, "Reissued", f"{inv.number} is now issued.")
         except Exception as exc:  # noqa: BLE001
             QMessageBox.warning(self, "Reissue failed", str(exc))
+
+    def record_payment_selected(self) -> None:
+        inv = self._selected_invoice()
+        if inv is None:
+            QMessageBox.information(self, "Select invoice", "Select an invoice to record payment for.")
+            return
+        if inv.is_draft or inv.is_void or inv.is_cancelled:
+            QMessageBox.information(
+                self, "Cannot record payment", "Only issued invoices can receive payments."
+            )
+            return
+        dlg = RecordPaymentDialog(self._context, invoice=inv, parent=self)
+        if dlg.exec() == 1:
+            self.refresh()
+
+    def issue_receipt_selected(self) -> None:
+        inv = self._selected_invoice()
+        if inv is None:
+            QMessageBox.information(self, "Select invoice", "Select an invoice to issue a receipt for.")
+            return
+        if not inv.payments:
+            QMessageBox.information(self, "No payments", "This invoice has no recorded payments.")
+            return
+        dlg = IssueReceiptDialog(self._context, invoice=inv, parent=self)
+        if dlg.exec() == 1:
+            self.refresh()
+
+    def _context_menu(self, pos: Any) -> None:
+        inv = self._selected_invoice()
+        if inv is None:
+            return
+        menu = QMenu(self)
+        menu.addAction("Edit", self._edit_invoice)
+        menu.addAction("Record payment", self.record_payment_selected)
+        menu.addAction("Issue receipt", self.issue_receipt_selected)
+        menu.addAction("Credit note", self._credit_note)
+        menu.addSeparator()
+        menu.addAction("Retract to draft", self.retract_selected)
+        menu.addAction("Reissue", self.reissue_selected)
+        menu.addAction("Cancel", self._cancel_invoice)
+        menu.addAction("Void", self._void_invoice)
+        menu.addSeparator()
+        menu.addAction("Regenerate PDF", self._regenerate_pdf)
+        menu.addAction("Open PDF", self._open_pdf)
+        menu.exec(self._table.viewport().mapToGlobal(pos))

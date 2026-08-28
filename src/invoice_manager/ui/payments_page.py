@@ -37,9 +37,15 @@ from invoice_manager.ui.app_context import AppContext
 class RecordPaymentDialog(QDialog):
     """Record a payment against an issued invoice."""
 
-    def __init__(self, context: AppContext, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        context: AppContext,
+        invoice: Invoice | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self._context = context
+        self._preselected = invoice
         self.setWindowTitle("Record Payment")
         self._build_ui()
         self._load_invoices()
@@ -81,6 +87,16 @@ class RecordPaymentDialog(QDialog):
         layout.addWidget(bbox)
 
     def _load_invoices(self) -> None:
+        if self._preselected is not None:
+            inv = self._preselected
+            balance = inv.total_cents - sum(
+                p.amount_cents for p in inv.payments if not p.is_reversed
+            ) - sum(c.amount_cents for c in inv.credits)
+            display = f"{inv.number} — {inv.client_name} — ${balance / 100:.2f}"
+            self._invoice.addItem(display, inv.id)
+            self._invoice.setEnabled(False)
+            self._amount.setValue(balance / 100)
+            return
         invoices = self._context.invoice_service.list_invoices()
         for inv in invoices:
             if inv.is_void or inv.is_cancelled or inv.status == "paid":
@@ -89,11 +105,13 @@ class RecordPaymentDialog(QDialog):
             self._invoice.addItem(display, inv.id)
 
     def _save(self) -> None:
-        invoice_id = self._invoice.currentData()
-        if invoice_id is None:
-            QMessageBox.warning(self, "No invoice", "Select an invoice.")
-            return
-        invoice = self._context.invoice_service.get(int(invoice_id))
+        invoice = self._preselected
+        if invoice is None:
+            invoice_id = self._invoice.currentData()
+            if invoice_id is None:
+                QMessageBox.warning(self, "No invoice", "Select an invoice.")
+                return
+            invoice = self._context.invoice_service.get(int(invoice_id))
         if invoice is None:
             return
         try:
@@ -129,6 +147,86 @@ class RecordPaymentDialog(QDialog):
         generate_receipt_pdf(payment, invoice, settings, receipt_path)
         payment.pdf_path = str(receipt_path)
         self._context.session.commit()
+
+
+class IssueReceiptDialog(QDialog):
+    """Generate a receipt PDF for an existing payment."""
+
+    def __init__(
+        self,
+        context: AppContext,
+        invoice: Invoice,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._context = context
+        self._invoice = invoice
+        self.setWindowTitle(f"Issue Receipt - {invoice.number}")
+        self._build_ui()
+        self._load_payments()
+
+    def _build_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel(f"Client: {self._invoice.client_name}"))
+
+        self._table = QTableWidget(0, 4)
+        self._table.setHorizontalHeaderLabels(["Receipt #", "Date", "Amount", "PDF"])
+        self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        layout.addWidget(self._table)
+
+        btn = QPushButton("Generate Receipt PDF")
+        btn.clicked.connect(self._generate)
+        layout.addWidget(btn)
+
+    def _load_payments(self) -> None:
+        self._payments = list(self._invoice.payments)
+        self._table.setRowCount(len(self._payments))
+        for row, payment in enumerate(self._payments):
+            self._table.setItem(row, 0, QTableWidgetItem(payment.receipt_number or "(not issued)"))
+            self._table.setItem(row, 1, QTableWidgetItem(str(payment.date)))
+            self._table.setItem(row, 2, QTableWidgetItem(f"${payment.amount_cents / 100:.2f}"))
+            self._table.setItem(row, 3, QTableWidgetItem("Yes" if payment.pdf_path else "No"))
+
+    def _selected_payment(self) -> Payment | None:
+        rows = self._table.selectedIndexes()
+        if not rows:
+            return None
+        return self._payments[rows[0].row()]
+
+    def _generate(self) -> None:
+        payment = self._selected_payment()
+        if payment is None:
+            QMessageBox.information(self, "Select payment", "Select a payment to receipt.")
+            return
+        if payment.is_reversed:
+            QMessageBox.information(self, "Reversed", "Cannot receipt a reversed payment.")
+            return
+        try:
+            payment.receipt_number = payment.receipt_number or self._context.payment_service._numbering.reserve("receipt")
+            self._context.payment_service._persist_numbering()
+            settings: dict[str, Any] = {
+                k: self._context.setting_repo.get(k)
+                for k in [
+                    "business_name",
+                    "business_address",
+                    "thank_you_note",
+                ]
+            }
+            receipt_path = (
+                self._context.config.get_data_directory()
+                / "documents"
+                / "receipts"
+                / str(cast(date, payment.date).year)
+                / f"{payment.receipt_number}.pdf"
+            )
+            generate_receipt_pdf(payment, self._invoice, settings, receipt_path)
+            payment.pdf_path = str(receipt_path)
+            self._context.session.commit()
+            self._load_payments()
+            QMessageBox.information(self, "Receipt saved", f"Saved {receipt_path}")
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Receipt failed", str(exc))
 
 
 class PaymentsPage(QWidget):

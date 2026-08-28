@@ -163,6 +163,11 @@ class MainWindow(QMainWindow):
         regen_inv_action.triggered.connect(self._regenerate_pdf_selected_invoice)
         open_inv_action = invoices_menu.addAction("Open PDF")
         open_inv_action.triggered.connect(self._open_pdf_selected_invoice)
+        invoices_menu.addSeparator()
+        record_payment_action = invoices_menu.addAction("Record payment")
+        record_payment_action.triggered.connect(self._record_payment_selected_invoice)
+        issue_receipt_action = invoices_menu.addAction("Issue receipt")
+        issue_receipt_action.triggered.connect(self._issue_receipt_selected_invoice)
 
         tools_menu = menu_bar.addMenu("Tools")
         import_action = tools_menu.addAction("Import / Migrate")
@@ -227,6 +232,12 @@ class MainWindow(QMainWindow):
 
     def _open_pdf_selected_invoice(self) -> None:
         self._with_selected_invoice("open PDF", "open_selected_pdf")
+
+    def _record_payment_selected_invoice(self) -> None:
+        self._with_selected_invoice("record payment", "record_payment_selected")
+
+    def _issue_receipt_selected_invoice(self) -> None:
+        self._with_selected_invoice("issue receipt", "issue_receipt_selected")
 
     def _generate_accountant_pack(self) -> None:
         now = datetime.now().year
