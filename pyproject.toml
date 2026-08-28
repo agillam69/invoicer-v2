@@ -9,14 +9,14 @@ description = "Invoicer V2 — local Australian invoice and receipt manager"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-  "PySide6==6.9.1",
-  "SQLAlchemy==2.0.43",
-  "alembic==1.16.4",
-  "reportlab==4.4.3",
+  "PySide6==6.11.2",
+  "SQLAlchemy==2.0.52",
+  "alembic==1.19.1",
+  "reportlab==5.0.1",
   "openpyxl==3.1.5",
   "argon2-cffi==25.1.0",
-  "pypdf==6.0.0",
-  "pdfplumber==0.11.7",
+  "pypdf==6.16.2",
+  "pdfplumber==0.11.10",
 ]
 
 [project.scripts]
@@ -26,11 +26,11 @@ invoice-manager = "invoice_manager.app:main"
 dev = [
   "pytest==8.4.1",
   "pytest-qt==4.5.0",
-  "pytest-cov==6.2.1",
-  "hypothesis==6.136.9",
-  "ruff==0.12.7",
-  "mypy==1.17.1",
-  "pyinstaller==6.14.2",
+  "pytest-cov==7.1.0",
+  "hypothesis==6.165.10",
+  "ruff==0.16.5",
+  "mypy==2.3.1",
+  "pyinstaller==6.22.2",
 ]
 
 [tool.setuptools]
@@ -43,6 +43,7 @@ where = ["src"]
 line-length = 100
 target-version = "py312"
 src = ["src", "tests"]
+exclude = ["v1"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM"]

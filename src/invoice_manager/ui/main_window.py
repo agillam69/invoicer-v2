@@ -1,0 +1,87 @@
+"""Main application window with a left navigation rail."""
+
+from __future__ import annotations
+
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QMainWindow,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
+
+from invoice_manager.infrastructure.config import AppConfig
+from invoice_manager.infrastructure.logging_setup import get_logger
+
+_log = get_logger("invoice_manager.ui.main_window")
+
+
+_NAV_ITEMS = [
+    "Dashboard",
+    "New Invoice",
+    "Invoices",
+    "Payments & Receipts",
+    "Clients",
+    "Products & Services",
+    "Income & Expenses",
+    "Reports",
+]
+
+
+class MainWindow(QMainWindow):
+    def __init__(self, config: AppConfig, current_user: str) -> None:
+        super().__init__()
+        self._config = config
+        self._current_user = current_user
+        self.setWindowTitle("Invoice & Receipt Manager")
+        self.setMinimumSize(1200, 800)
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        central = QWidget()
+        self.setCentralWidget(central)
+        layout = QHBoxLayout(central)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # Left nav rail
+        nav_container = QWidget()
+        nav_container.setFixedWidth(200)
+        nav_layout = QVBoxLayout(nav_container)
+        nav_layout.setContentsMargins(8, 8, 8, 8)
+
+        self._nav = QListWidget()
+        for label in _NAV_ITEMS:
+            item = QListWidgetItem(label)
+            item.setFlags(Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled)
+            self._nav.addItem(item)
+        self._nav.setCurrentRow(0)
+        self._nav.currentRowChanged.connect(self._on_nav_changed)
+        nav_layout.addWidget(self._nav)
+
+        self._status_label = QLabel(f"User: {self._current_user}")
+        self._status_label.setWordWrap(True)
+        nav_layout.addWidget(self._status_label)
+
+        layout.addWidget(nav_container)
+
+        # Content area
+        self._stack = QStackedWidget()
+        for label in _NAV_ITEMS:
+            page = self._placeholder_page(label)
+            self._stack.addWidget(page)
+        layout.addWidget(self._stack, stretch=1)
+
+    def _placeholder_page(self, label: str) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.addWidget(QLabel(f"<h1>{label}</h1><p>This screen is under construction.</p>"))
+        layout.addStretch()
+        return page
+
+    def _on_nav_changed(self, index: int) -> None:
+        self._stack.setCurrentIndex(index)
