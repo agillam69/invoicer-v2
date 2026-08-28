@@ -56,10 +56,11 @@ class AppContext:
             gst_rate=gst_rate,
             payment_terms_days=payment_terms,
         )
+        self.ledger_service = LedgerService(self.ledger_repo, self.audit)
         self.payment_service = PaymentService(
             payment_repo=self.payment_repo,
             invoice_repo=self.invoice_repo,
             setting_repo=self.setting_repo,
             audit=self.audit,
+            ledger_service=self.ledger_service,
         )
-        self.ledger_service = LedgerService(self.ledger_repo, self.audit)

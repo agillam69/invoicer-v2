@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date
 from typing import cast
 
+from invoice_manager.application.ledger_service import LedgerService
 from invoice_manager.domain.numbering import NumberingService
 from invoice_manager.domain.statuses import derive_invoice_status
 from invoice_manager.infrastructure.audit import AuditService
@@ -29,11 +30,13 @@ class PaymentService:
         invoice_repo: InvoiceRepository,
         setting_repo: SettingRepository,
         audit: AuditService,
+        ledger_service: LedgerService | None = None,
     ) -> None:
         self._payment_repo = payment_repo
         self._invoice_repo = invoice_repo
         self._setting_repo = setting_repo
         self._audit = audit
+        self._ledger_service = ledger_service
         self._numbering = self._load_numbering()
 
     def _load_numbering(self) -> NumberingService:
@@ -88,6 +91,16 @@ class PaymentService:
             payment.id,
             {"invoice": invoice.number, "amount_cents": amount_cents},
         )
+        if self._ledger_service is not None:
+            self._ledger_service.add_entry(
+                entry_date=payment_date,
+                entry_type="in",
+                category="Invoice Payment",
+                description=f"Payment for {invoice.number}",
+                amount_cents=amount_cents,
+                reference=payment.receipt_number,
+                notes=notes,
+            )
         return payment
 
     def reverse(self, payment: Payment, reason: str) -> Payment:
@@ -99,6 +112,16 @@ class PaymentService:
         if invoice is not None:
             self._update_invoice_status(invoice)
         self._audit.record("payment_reversed", "payments", payment.id, {"reason": reason})
+        if self._ledger_service is not None and invoice is not None:
+            self._ledger_service.add_entry(
+                entry_date=date.today(),
+                entry_type="out",
+                category="Invoice Payment Reversal",
+                description=f"Reversal of payment for {invoice.number}",
+                amount_cents=payment.amount_cents,
+                reference=payment.receipt_number,
+                notes=f"Reversed: {reason}",
+            )
         return payment
 
     def set_next_receipt_number(self, value: int) -> None:
