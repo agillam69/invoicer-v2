@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
 from pathlib import Path
 
 import pdfplumber
-import pytest
 
 from invoice_manager.documents.accountant_pack_pdf import generate_accountant_pack_pdf
 from invoice_manager.infrastructure.audit import AuditService
@@ -22,7 +20,6 @@ from invoice_manager.persistence.repositories import (
     ServiceItemRepository,
     SettingRepository,
 )
-from invoice_manager.ui.app_context import AppContext
 
 
 class _FakeContext:

@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from invoice_manager.application.backup_service import BackupService, BackupServiceError
+from invoice_manager.application.export_service import DataExportService, DataExportServiceError
 from invoice_manager.documents.accountant_pack_pdf import generate_accountant_pack_pdf
 from invoice_manager.infrastructure.config import AppConfig
 from invoice_manager.infrastructure.logging_setup import get_logger
@@ -144,6 +145,8 @@ class MainWindow(QMainWindow):
         import_action.triggered.connect(self._open_migration_wizard)
         accountant_action = tools_menu.addAction("Accountant pack...")
         accountant_action.triggered.connect(self._generate_accountant_pack)
+        export_action = tools_menu.addAction("Export all data...")
+        export_action.triggered.connect(self._export_all_data)
         tools_menu.addSeparator()
         backup_action = tools_menu.addAction("Backup now")
         backup_action.triggered.connect(self._backup_now)
@@ -206,6 +209,23 @@ class MainWindow(QMainWindow):
         except Exception as exc:  # noqa: BLE001
             _log.exception("Accountant pack failed: %s", exc)
             QMessageBox.warning(self, "Accountant pack failed", str(exc))
+
+    def _export_all_data(self) -> None:
+        default_name = f"invoice_manager_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export all data",
+            str(self._context.config.get_exports_directory() / default_name),
+            "Zip files (*.zip)",
+        )
+        if not path:
+            return
+        try:
+            service = DataExportService(self._context.config)
+            archive = service.export_all(Path(path))
+            QMessageBox.information(self, "Export complete", f"Saved: {archive}")
+        except DataExportServiceError as exc:
+            QMessageBox.warning(self, "Export failed", str(exc))
 
     def _start_backup_scheduler(self) -> None:
         self._backup_if_due()
