@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Invoice Generator v1.34 — Help Guide</title>
+<style>
+  :root {
+    --primary: #2563eb;
+    --primary-light: #dbeafe;
+    --success: #16a34a;
+    --success-light: #dcfce7;
+    --warning: #d97706;
+    --warning-light: #fef3c7;
+    --danger: #dc2626;
+    --danger-light: #fee2e2;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --border: #e2e8f0;
+    --text: #1e293b;
+    --muted: #64748b;
+    --code-bg: #f1f5f9;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 0;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
+  header {
+    background: linear-gradient(135deg, var(--primary), #1d4ed8);
+    color: white;
+    padding: 2.5rem 0;
+    text-align: center;
+  }
+  header h1 { font-size: 2rem; font-weight: 700; margin-bottom: 0.3rem; }
+  header p { opacity: 0.85; font-size: 1rem; }
+  nav.toc {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem 2rem;
+    margin: 2rem 0;
+  }
+  nav.toc h2 { font-size: 1.1rem; margin-bottom: 0.8rem; color: var(--primary); }
+  nav.toc ol { padding-left: 1.2rem; }
+  nav.toc li { margin: 0.3rem 0; }
+  nav.toc a { color: var(--primary); text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+  section { margin: 2.5rem 0; }
+  h2 {
+    font-size: 1.4rem;
+    color: var(--primary);
+    border-bottom: 2px solid var(--primary-light);
+    padding-bottom: 0.4rem;
+    margin-bottom: 1rem;
+  }
+  h3 {
+    font-size: 1.1rem;
+    color: var(--text);
+    margin: 1.2rem 0 0.5rem;
+  }
+  h4 {
+    font-size: 0.95rem;
+    color: var(--muted);
+    margin: 0.8rem 0 0.3rem;
+    font-weight: 600;
+  }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.5rem; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem 1.5rem;
+    margin: 1rem 0;
+  }
+  .card-header {
+    font-weight: 600;
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+  }
+  .steps {
+    counter-reset: step;
+    list-style: none;
+    padding-left: 0;
+  }
+  .steps li {
+    counter-increment: step;
+    padding: 0.6rem 0 0.6rem 2.5rem;
+    position: relative;
+    border-left: 2px solid var(--border);
+    margin-left: 0.8rem;
+  }
+  .steps li:last-child { border-left: 2px solid transparent; }
+  .steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: -0.85rem;
+    top: 0.5rem;
+    width: 1.5rem;
+    height: 1.5rem;
+    background: var(--primary);
+    color: white;
+    border-radius: 50%;
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+    vertical-align: middle;
+    margin-left: 0.3rem;
+  }
+  .badge-tab { background: var(--primary-light); color: var(--primary); }
+  .badge-menu { background: var(--warning-light); color: var(--warning); }
+  .badge-shortcut { background: var(--success-light); color: var(--success); }
+  code {
+    background: var(--code-bg);
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.85em;
+    font-family: 'Consolas', 'Courier New', monospace;
+  }
+  .tip {
+    background: var(--success-light);
+    border-left: 4px solid var(--success);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 0.8rem 0;
+    font-size: 0.9rem;
+  }
+  .warning {
+    background: var(--warning-light);
+    border-left: 4px solid var(--warning);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 0.8rem 0;
+    font-size: 0.9rem;
+  }
+  .danger {
+    background: var(--danger-light);
+    border-left: 4px solid var(--danger);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 0.8rem 0;
+    font-size: 0.9rem;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.8rem 0;
+    font-size: 0.9rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.5rem 0.8rem;
+    border: 1px solid var(--border);
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  footer {
+    text-align: center;
+    padding: 2rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+    border-top: 1px solid var(--border);
+    margin-top: 3rem;
+  }
+  @media (max-width: 640px) {
+    .container { padding: 1rem; }
+    header h1 { font-size: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Invoice Generator v1.34</h1>
+  <p>Complete User Help Guide — Training &amp; Invoicing Management</p>
+</header>
+
+<div class="container">
+
+<nav class="toc">
+  <h2>Table of Contents</h2>
+  <ol>
+    <li><a href="#getting-started">Getting Started</a></li>
+    <li><a href="#login">Login &amp; Users</a></li>
+    <li><a href="#invoices">Creating &amp; Managing Invoices</a></li>
+    <li><a href="#invoice-history">Invoice History</a></li>
+    <li><a href="#clients">Managing Clients</a></li>
+    <li><a href="#ledger">Ledger (Income &amp; Expenses)</a></li>
+    <li><a href="#students">Student Management</a></li>
+    <li><a href="#student-detail">Student Detail View</a></li>
+    <li><a href="#courses">Course Management</a></li>
+    <li><a href="#course-detail">Course Detail &amp; Enrolments</a></li>
+    <li><a href="#cert-budget">Certificate Budget Tracking</a></li>
+    <li><a href="#reports">Reports</a></li>
+    <li><a href="#documents">Document Generation</a></li>
+    <li><a href="#settings">Settings &amp; Configuration</a></li>
+    <li><a href="#data-management">Data Management &amp; Backups</a></li>
+    <li><a href="#keyboard-shortcuts">Keyboard Shortcuts &amp; Tips</a></li>
+    <li><a href="#troubleshooting">Troubleshooting</a></li>
+  </ol>
+</nav>
+
+<!-- ===================================================================== -->
+<section id="getting-started">
+<h2>1. Getting Started</h2>
+
+<p>Invoice Generator is a Windows desktop application for managing invoices, training courses, student enrolments, financial ledger, and certificate budgets — all in one place.</p>
+
+<h3>First Launch</h3>
+<ol class="steps">
+  <li>Double-click <code>Invoice Generator v1.34.exe</code> to start the application.</li>
+  <li>On first run, a <strong>login screen</strong> appears. Default credentials: username <code>admin</code>, password <code>Admin</code>.</li>
+  <li>The application creates all required data files automatically in the same directory as the executable.</li>
+  <li>Go to <strong>Edit → Settings</strong> to configure your business details, GST rate, and payment terms.</li>
+</ol>
+
+<div class="tip">
+  <strong>Tip:</strong> All dates in the application use <strong>DD/MM/YYYY</strong> format. When typing dates, entering <code>dd/mm/yy</code> will auto-correct to full 4-digit year.
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="login">
+<h2>2. Login &amp; Users</h2>
+
+<h3>Logging In</h3>
+<p>Each time the application starts, you are prompted for a username and password. The current user is displayed in the status bar at the bottom.</p>
+
+<h3>Managing Users</h3>
+<ol class="steps">
+  <li>Go to <strong>Users → Manage Users…</strong> from the menu bar.</li>
+  <li>Add new users, change passwords, or delete user accounts.</li>
+  <li>All user activity is logged in the audit trail.</li>
+</ol>
+
+<div class="warning">
+  <strong>Note:</strong> The default admin account has username <code>admin</code> and password <code>Admin</code>. Change this immediately after first login.
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="invoices">
+<h2>3. Creating &amp; Managing Invoices</h2>
+<span class="badge badge-tab">Create Invoice Tab</span>
+
+<h3>Create a New Invoice</h3>
+<ol class="steps">
+  <li>Navigate to the <strong>Create Invoice</strong> tab.</li>
+  <li>Invoice number and date are pre-filled. Adjust the <strong>due date</strong> if needed.</li>
+  <li>Select a client from the dropdown or enter a name and address manually.</li>
+  <li>Add line items by selecting from the <strong>Service catalogue</strong> or typing a description, quantity, and unit price.</li>
+  <li>Check <strong>Taxable</strong> for items that attract GST.</li>
+  <li>Click <strong>Add Item</strong> to add the line. Repeat for multiple items.</li>
+  <li>Review the subtotal, GST, and total at the bottom.</li>
+  <li>Click <strong>Save Invoice</strong> — a PDF is generated and saved automatically.</li>
+</ol>
+
+<h3>Create Invoice from Course</h3>
+<ol class="steps">
+  <li>Click <strong>⚡ From Course…</strong> in the Invoice Details panel.</li>
+  <li>Pick a course from the list.</li>
+  <li>Line items are auto-populated from the course's enrolments and cert costs.</li>
+  <li>Review and adjust items, then save.</li>
+</ol>
+
+<h3>Edit a Line Item</h3>
+<p>Double-click any line item in the items table to load it back into the edit form. Make changes and click <strong>Add Item</strong> (now labelled "Update Item") to save.</p>
+
+<h3>Remove a Line Item</h3>
+<p>Select a line item and click <strong>Remove Selected</strong>.</p>
+
+<div class="tip">
+  <strong>Tip:</strong> Use <strong>Edit → New Invoice</strong> or <kbd>Ctrl+N</kbd> to clear the form and start fresh.
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="invoice-history">
+<h2>4. Invoice History</h2>
+<span class="badge badge-tab">Invoice History Tab</span>
+
+<p>All saved invoices appear in this tab with colour-coded status rows:</p>
+<table>
+  <tr><th>Status</th><th>Colour</th><th>Meaning</th></tr>
+  <tr><td>Paid</td><td style="background:#d4edda">Green</td><td>Payment received</td></tr>
+  <tr><td>Unpaid</td><td style="background:#fff3cd">Yellow</td><td>Awaiting payment</td></tr>
+  <tr><td>Cancelled</td><td style="background:#f8d7da">Red</td><td>Invoice cancelled</td></tr>
+  <tr><td>Void</td><td style="background:#e2e3e5">Grey</td><td>Voided / invalid</td></tr>
+</table>
+
+<h3>Available Actions</h3>
+<ul>
+  <li><strong>Open PDF</strong> — open the generated invoice PDF</li>
+  <li><strong>Edit Invoice…</strong> — modify invoice details (double-click also works)</li>
+  <li><strong>Record Payment</strong> — mark an invoice as paid with payment date and notes</li>
+  <li><strong>Cancel Invoice</strong> — set status to cancelled</li>
+  <li><strong>Reissue Invoice</strong> — create a corrected copy</li>
+  <li><strong>Link PDF…</strong> — associate an external PDF file with an invoice</li>
+  <li><strong>Reveal Invoice Folder</strong> — open the folder containing invoice PDFs</li>
+  <li><strong>Record Missing…</strong> — log an invoice created outside the system</li>
+  <li><strong>Export to CSV…</strong> — export all invoices to a spreadsheet</li>
+</ul>
+</section>
+
+<!-- ===================================================================== -->
+<section id="clients">
+<h2>5. Managing Clients</h2>
+<span class="badge badge-tab">Clients Tab</span>
+
+<p>The Clients tab shows all clients with their contact details, number of invoices, and total billed.</p>
+
+<h3>Add / Edit Clients</h3>
+<ol class="steps">
+  <li>Click <strong>Manage Clients</strong> (or <strong>Edit → Manage Clients…</strong>).</li>
+  <li>In the dialog, add a new client with name, contact person, phone, email, and address.</li>
+  <li>Select an existing client and edit or delete.</li>
+  <li>Clients are available in the invoice creation dropdown after saving.</li>
+</ol>
+</section>
+
+<!-- ===================================================================== -->
+<section id="ledger">
+<h2>6. Ledger (Income &amp; Expenses)</h2>
+<span class="badge badge-tab">Ledger Tab</span>
+
+<p>Track all financial transactions (non-invoice income and expenses) in a general ledger.</p>
+
+<h3>Add a Ledger Entry</h3>
+<ol class="steps">
+  <li>Go to the <strong>Ledger</strong> tab.</li>
+  <li>Fill in: <strong>Date</strong>, <strong>Type</strong> (in/out), <strong>Category</strong>, <strong>Amount</strong>, <strong>Description</strong>, <strong>Reference</strong>, and <strong>Notes</strong>.</li>
+  <li>Click <strong>Add Entry</strong>.</li>
+</ol>
+
+<h3>Edit an Existing Entry</h3>
+<p>Double-click a row in the ledger tree to load it into the form for editing. The button changes to "Update Entry".</p>
+
+<h3>Filtering &amp; Date Ranges</h3>
+<ul>
+  <li>Use the <strong>Search</strong> box to filter by any text.</li>
+  <li>Filter by <strong>Type</strong> (in/out) or <strong>Category</strong>.</li>
+  <li>Set <strong>From</strong> / <strong>To</strong> dates, or use quick-select buttons: This Week, This Month, Last Month, This Year, All.</li>
+</ul>
+
+<h3>Import &amp; Export</h3>
+<ul>
+  <li><strong>Paste from Clipboard</strong> — paste tab- or comma-separated data.</li>
+  <li><strong>Import from CSV…</strong> — import ledger entries from a CSV file.</li>
+  <li><strong>Export to CSV…</strong> — save all ledger entries to a CSV file.</li>
+</ul>
+
+<div class="tip">
+  <strong>Tip:</strong> The running balance summary (total in / out / net) is shown above the ledger tree and updates live as you filter.
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="students">
+<h2>7. Student Management</h2>
+<span class="badge badge-tab">Students Tab → Student Register</span>
+
+<p>The Student Register is the main view showing all students and their enrolments in a flat list.</p>
+
+<h3>Add a Student</h3>
+<ol class="steps">
+  <li>Click <strong>Add Student</strong> in the toolbar.</li>
+  <li>Fill in the student's details: first name, last name, email, phone, USI, work group, manager, emergency contact.</li>
+  <li>Optionally link an enrolment at the same time.</li>
+  <li>Click <strong>Save</strong>.</li>
+</ol>
+
+<h3>Inline Editing</h3>
+<p>Double-click any editable cell directly in the register tree to modify it in-place. Combo dropdowns appear for status fields, date pickers for date fields.</p>
+
+<h3>Filtering</h3>
+<ul>
+  <li><strong>Filter</strong> — free-text search across all columns.</li>
+  <li><strong>Status</strong> — filter by enrolment status (enrolled, completed, etc.).</li>
+  <li><strong>Show Deleted</strong> — toggle to reveal soft-deleted records.</li>
+</ul>
+
+<h3>Bulk Actions</h3>
+<ul>
+  <li><strong>Bulk Edit…</strong> — select multiple rows, then set a field (work group, status, cert issued, etc.) to the same value.</li>
+  <li><strong>Mark Completed</strong> — mark selected enrolments as completed.</li>
+  <li><strong>Mark Cert Issued</strong> — mark cert issued with today's date.</li>
+</ul>
+
+<h3>Import Options</h3>
+<ul>
+  <li><strong>Import XLSX…</strong> — import from an Excel student tracker.</li>
+  <li><strong>Import CSV…</strong> — import legacy flat CSV format.</li>
+  <li><strong>Paste Students</strong> — paste clipboard data (tab/comma separated).</li>
+  <li><strong>Export CSV…</strong> — export student records.</li>
+</ul>
+
+<h3>Merge Duplicates</h3>
+<ul>
+  <li><strong>Merge Duplicates</strong> — auto-find and merge records with the same name/email.</li>
+  <li><strong>Manual Merge…</strong> — pick two specific students to merge, choosing which field values to keep.</li>
+</ul>
+
+<h3>Understanding Cert Cost Display</h3>
+<table>
+  <tr><th>Display</th><th>Meaning</th></tr>
+  <tr><td><code>$50.00</code></td><td>Cost was <strong>charged</strong> against the budget (enrolled, completed, no show)</td></tr>
+  <tr><td><code>($50.00)</code></td><td>Cost was <strong>not charged</strong> — in parentheses (pending, cancelled, withdrawn &amp; not charged, etc.)</td></tr>
+  <tr><td><em>(blank)</em></td><td>No cost set for this course</td></tr>
+</table>
+</section>
+
+<!-- ===================================================================== -->
+<section id="student-detail">
+<h2>8. Student Detail View</h2>
+<span class="badge badge-tab">Students Tab → Student Detail</span>
+
+<p>The Student Detail sub-tab shows comprehensive information about a single student and all their enrolments.</p>
+
+<h3>Opening a Student's Detail</h3>
+<ol class="steps">
+  <li>In the Student Register, select a student row.</li>
+  <li>Click <strong>Open Detail</strong> (or right-click → "Open Student Detail").</li>
+  <li>The Student Detail tab opens showing the student's info header and enrolment tree.</li>
+</ol>
+
+<h3>Student Info Header</h3>
+<p>Displays: name, email, phone, USI, status, work group, manager, emergency contact, and notes.</p>
+
+<h3>Enrolment Tree</h3>
+<p>All enrolments for this student (including deleted) are listed with:</p>
+<ul>
+  <li>Course name and date</li>
+  <li>Cost (parenthesised if not charged)</li>
+  <li>Enrolment status, attendance, cert issued, cert date</li>
+  <li>Cancellation notes and general notes</li>
+</ul>
+
+<h3>Editing Enrolments</h3>
+<ul>
+  <li><strong>Inline edit</strong> — double-click status, attendance, cert issued, cert date, or notes to edit in-place.</li>
+  <li><strong>Right-click</strong> — context menu with Set Status ▶, Set Attendance ▶, Set Cert Issued ▶ submenus.</li>
+  <li><strong>Edit Enrolment…</strong> — opens the full enrolment dialog for comprehensive editing.</li>
+  <li><strong>Edit Student…</strong> — opens the student record dialog to update personal details.</li>
+</ul>
+
+<h3>Enrolment Actions</h3>
+<ul>
+  <li><strong>Delete Enrolment</strong> — soft-delete (restorable). Reverses any budget spend.</li>
+  <li><strong>Restore Enrolment</strong> — un-delete a previously deleted enrolment.</li>
+  <li><strong>Mark Completed</strong> — change status to "completed" for selected enrolments.</li>
+  <li><strong>Mark Cert Issued</strong> — set cert issued to "yes" and cert date to today.</li>
+</ul>
+
+<div class="tip">
+  <strong>Data Consistency:</strong> All edits in the Student Detail view are saved through the central DataStore and apply system-wide. Changes automatically refresh in both the Student Register and any other views (Courses, Reports).
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="courses">
+<h2>9. Course Management</h2>
+<span class="badge badge-tab">Courses Tab → Course List</span>
+
+<h3>Create a Course</h3>
+<ol class="steps">
+  <li>Go to <strong>Courses</strong> tab → <strong>Course List</strong>.</li>
+  <li>Click <strong>Create Course…</strong> to open the wizard.</li>
+  <li>Step 1: Select a course type (or create a new one).</li>
+  <li>Step 2: Enter date, location, trainer, max students, cert cost, and pool.</li>
+  <li>Step 3: Add students (optional at this stage).</li>
+  <li>Click <strong>Finish</strong> to create the course.</li>
+</ol>
+
+<h3>Course List Features</h3>
+<ul>
+  <li>Filter by text, status (pending/scheduled/confirmed/completed/cancelled).</li>
+  <li>Double-click a course to open its <strong>Course Detail</strong> view.</li>
+  <li>Right-click for quick actions: Open Detail, Edit, Delete.</li>
+  <li>Colour-coded rows by status.</li>
+</ul>
+
+<h3>Course Statuses</h3>
+<table>
+  <tr><th>Status</th><th>Meaning</th></tr>
+  <tr><td>Pending</td><td>Not yet confirmed</td></tr>
+  <tr><td>Scheduled</td><td>Confirmed and scheduled</td></tr>
+  <tr><td>Confirmed</td><td>Fully confirmed with students</td></tr>
+  <tr><td>Completed</td><td>Course has been delivered</td></tr>
+  <tr><td>Cancelled</td><td>Course was cancelled</td></tr>
+</table>
+</section>
+
+<!-- ===================================================================== -->
+<section id="course-detail">
+<h2>10. Course Detail &amp; Enrolments</h2>
+<span class="badge badge-tab">Courses Tab → Course Detail</span>
+
+<h3>Opening Course Detail</h3>
+<p>Double-click a course in the Course List or click <strong>Open Detail</strong> to switch to the Course Detail sub-tab.</p>
+
+<h3>Course Info Panel</h3>
+<p>Shows course type, date, location, trainer, max students, status, and editable course notes.</p>
+
+<h3>Managing Enrolments</h3>
+<ol class="steps">
+  <li><strong>Add Student</strong> — pick from existing students or enter new details.</li>
+  <li><strong>Edit Selected</strong> — open the full enrolment dialog.</li>
+  <li><strong>Bulk Edit…</strong> — change a field across multiple selected enrolments.</li>
+  <li><strong>Mark Completed</strong> — set all selected to "completed" status.</li>
+  <li><strong>Mark Cert Issued</strong> — set cert issued for all selected.</li>
+  <li><strong>Remove Selected</strong> — soft-delete enrolments (reversible).</li>
+</ol>
+
+<h3>Inline Editing</h3>
+<p>Double-click any editable cell in the enrolment tree. Right-click for quick-set context menus.</p>
+
+<h3>Import / Export</h3>
+<ul>
+  <li><strong>Paste Clipboard</strong> — paste student data (tab/comma separated).</li>
+  <li><strong>Import CSV…</strong> — import enrolments from a CSV file.</li>
+  <li><strong>Export CSV…</strong> — export the enrolment list for this course.</li>
+</ul>
+
+<h3>Enrolment Status &amp; Budget Impact</h3>
+<table>
+  <tr><th>Status</th><th>Budget Impact</th></tr>
+  <tr><td>Pending</td><td>No budget deduction</td></tr>
+  <tr><td>Enrolled</td><td>Deducts cert cost from budget pool</td></tr>
+  <tr><td>Completed</td><td>Deducts cert cost (cost consumed)</td></tr>
+  <tr><td>Cancelled &amp; reallocated</td><td>No charge — slot reassigned</td></tr>
+  <tr><td>Withdrawn &amp; reallocated</td><td>No charge — slot reassigned</td></tr>
+  <tr><td>Withdrawn &amp; charged</td><td>Billed externally (no pool deduction)</td></tr>
+  <tr><td>Withdrawn &amp; not charged</td><td>No charge</td></tr>
+  <tr><td>Cancelled &amp; billed</td><td>Billed externally</td></tr>
+  <tr><td>Withdrawn &amp; billed</td><td>Billed externally</td></tr>
+  <tr><td>No show</td><td>Deducts cert cost (cost consumed)</td></tr>
+  <tr><td>No show &amp; billed</td><td>Billed externally</td></tr>
+</table>
+</section>
+
+<!-- ===================================================================== -->
+<section id="cert-budget">
+<h2>11. Certificate Budget Tracking</h2>
+<span class="badge badge-tab">Cert Budget Tab</span>
+
+<p>Track certification budget pools — money allocated for cert costs vs. actual spend.</p>
+
+<h3>Managing Budget Entries</h3>
+<ol class="steps">
+  <li>Click <strong>Add Top-Up</strong> to record funding added to a pool.</li>
+  <li>Click <strong>Add Spend</strong> to manually record a cost against a pool.</li>
+  <li>Select an entry and click <strong>Edit Selected</strong> or <strong>Delete Selected</strong>.</li>
+</ol>
+
+<h3>Budget Pools</h3>
+<ul>
+  <li>Click <strong>Manage Pools…</strong> to create, rename, or delete budget pools.</li>
+  <li>Each pool shows a balance card with: top-up total, spent total, remaining balance.</li>
+  <li>Balances update automatically when enrolments are created or status changes trigger budget auto-posting.</li>
+</ul>
+
+<h3>Automatic Budget Posting</h3>
+<p>When an enrolment status changes:</p>
+<ul>
+  <li><strong>Status → enrolled/completed/no show</strong>: cert cost is automatically deducted from the pool.</li>
+  <li><strong>Status → pending/cancelled/withdrawn</strong>: any previous deduction is reversed.</li>
+  <li>Deletions also reverse any auto-posted spend.</li>
+</ul>
+
+<h3>Filtering</h3>
+<p>Filter budget entries by search text, type (topup/spend), pool name, and date range.</p>
+</section>
+
+<!-- ===================================================================== -->
+<section id="reports">
+<h2>12. Reports</h2>
+<span class="badge badge-tab">Reports Tab</span>
+
+<p>The Reports tab provides a sidebar with multiple report views:</p>
+
+<div class="card">
+<table>
+  <tr><th>Report</th><th>Description</th></tr>
+  <tr><td>Summary</td><td>Business overview — total invoiced, income, expenses, net position</td></tr>
+  <tr><td>Invoices</td><td>Filterable invoice listing with totals</td></tr>
+  <tr><td>Ledger</td><td>Ledger summary with period comparison</td></tr>
+  <tr><td>Students</td><td>Student statistics and enrolment counts</td></tr>
+  <tr><td>Courses</td><td>Course statistics — completion rates, attendance</td></tr>
+  <tr><td>Cert Budget</td><td>Budget pool status and spend breakdown</td></tr>
+  <tr><td>ATO / Tax</td><td>Tax-relevant figures for BAS/tax returns (GST collected, expenses)</td></tr>
+  <tr><td>Custom Report</td><td>Build custom date-range queries across all data</td></tr>
+  <tr><td>Audit Log</td><td>All system changes (who did what, when)</td></tr>
+  <tr><td>App Log</td><td>Technical application log for debugging</td></tr>
+</table>
+</div>
+
+<h3>Using Custom Report</h3>
+<ol class="steps">
+  <li>Select <strong>Custom Report</strong> from the sidebar.</li>
+  <li>Set a date range using the From/To date pickers (DD/MM/YYYY).</li>
+  <li>Choose which data to include.</li>
+  <li>Click <strong>Generate</strong> to view results.</li>
+  <li>Export to CSV if needed.</li>
+</ol>
+
+<h3>Course Reports sub-tab</h3>
+<p>Within the Courses tab, there are additional sub-tabs:</p>
+<ul>
+  <li><strong>Course Reports</strong> — aggregate statistics across all courses.</li>
+  <li><strong>Booking Report</strong> — shows enrolment counts and availability per course.</li>
+</ul>
+</section>
+
+<!-- ===================================================================== -->
+<section id="documents">
+<h2>13. Document Generation</h2>
+
+<p>Generate Word documents (.docx) from course and enrolment data:</p>
+
+<h3>Single Certificate</h3>
+<ol class="steps">
+  <li>In Course Detail, select a student from the enrolment tree.</li>
+  <li>Click <strong>Certificate…</strong> (or right-click → Generate Certificate).</li>
+  <li>Choose a save location. A .docx certificate is generated with the student's name, course, date, and training manager signature block.</li>
+</ol>
+
+<h3>Batch Certificates</h3>
+<ol class="steps">
+  <li>In Course Detail, click <strong>Batch Certificates…</strong>.</li>
+  <li>A single Word document is generated with one certificate per page for all eligible students.</li>
+</ol>
+
+<h3>Delivery Record</h3>
+<ol class="steps">
+  <li>In Course Detail, click <strong>Delivery Record…</strong>.</li>
+  <li>A Course Delivery Record / Proof of Delivery document is generated listing all students, their attendance, and signature blocks.</li>
+</ol>
+</section>
+
+<!-- ===================================================================== -->
+<section id="settings">
+<h2>14. Settings &amp; Configuration</h2>
+<span class="badge badge-menu">Edit → Settings…</span>
+
+<h3>Business Details</h3>
+<ul>
+  <li>Business name, ABN, address, phone, email</li>
+  <li>Training Manager name (used on certificates)</li>
+</ul>
+
+<h3>Invoice Settings</h3>
+<ul>
+  <li><strong>Next invoice number</strong> — auto-incrementing</li>
+  <li><strong>GST rate</strong> — default 10%</li>
+  <li><strong>Payment terms</strong> — days until due (default 30)</li>
+  <li><strong>Currency symbol</strong> — default $</li>
+  <li><strong>Thank you note</strong> — printed on invoices</li>
+  <li><strong>Show "GST not registered"</strong> — for non-registered businesses</li>
+</ul>
+
+<h3>Bank Details</h3>
+<ul>
+  <li>Bank name, BSB, account number, account name — printed on invoices</li>
+</ul>
+
+<h3>PDF Settings</h3>
+<ul>
+  <li><strong>PDF save mode</strong> — auto (saves to default folder), or custom directory</li>
+  <li><strong>PDF save directory</strong> — custom output folder for invoice PDFs</li>
+</ul>
+
+<h3>Backup Settings</h3>
+<ul>
+  <li><strong>Auto-backup enabled</strong> — toggle automatic backups</li>
+  <li><strong>Frequency</strong> — daily, hourly, etc.</li>
+  <li><strong>Backup directory</strong> — where zip backups are stored</li>
+  <li><strong>Keep N backups</strong> — old backups are pruned</li>
+  <li><strong>Backup on exit</strong> — run backup when closing the app</li>
+</ul>
+
+<h3>Data Directory</h3>
+<p>Via the Config tab in Settings, you can change the data folder. This moves all CSV files to a new location (e.g., a network drive or cloud-synced folder).</p>
+
+<h3>Service Catalogue</h3>
+<p><strong>Edit → Manage Service Catalogue…</strong> lets you maintain reusable line items (description + price + taxable flag) that appear in the invoice creation dropdown.</p>
+</section>
+
+<!-- ===================================================================== -->
+<section id="data-management">
+<h2>15. Data Management &amp; Backups</h2>
+
+<h3>Automatic Backups</h3>
+<p>When enabled in Settings, the app silently creates timestamped zip backups at the configured interval. Old backups are automatically pruned.</p>
+
+<h3>Manual Backup</h3>
+<p><strong>Tools → Backup Now</strong> creates an immediate backup.</p>
+
+<h3>Export All Data</h3>
+<p><strong>Tools → Export All Data…</strong> creates a complete zip archive of all data files, invoice PDFs, and logs — with a manifest for easy identification.</p>
+
+<h3>Import Data</h3>
+<p><strong>Tools → Import Data…</strong> restores from a previously exported zip. You can choose to overwrite existing files or only import missing ones.</p>
+
+<h3>Reload from Disk</h3>
+<p><strong>Tools → Reload All from Disk</strong> (or <kbd>F5</kbd>) re-reads all data files and refreshes every tab — useful if files were edited externally.</p>
+
+<h3>Migration from Older Versions</h3>
+<p><strong>Tools → Migrate from V1.8 folder/zip…</strong> imports data from an older format.</p>
+
+<h3>Windows Startup</h3>
+<p>The application can be configured to launch at Windows logon via the registry Run key. When launched this way, it uses a <code>--delayed</code> flag to wait briefly before showing the window.</p>
+</section>
+
+<!-- ===================================================================== -->
+<section id="keyboard-shortcuts">
+<h2>16. Keyboard Shortcuts &amp; Tips</h2>
+
+<table>
+  <tr><th>Shortcut</th><th>Action</th></tr>
+  <tr><td><kbd>Ctrl+N</kbd></td><td>New Invoice (clear form)</td></tr>
+  <tr><td><kbd>Ctrl+S</kbd></td><td>Save Invoice</td></tr>
+  <tr><td><kbd>F5</kbd></td><td>Reload All from Disk</td></tr>
+  <tr><td><kbd>Double-click</kbd></td><td>Inline edit any tree cell / open detail</td></tr>
+  <tr><td><kbd>Right-click</kbd></td><td>Context menu with quick actions</td></tr>
+  <tr><td><kbd>Ctrl+Shift+C</kbd></td><td>Copy selected tree rows to clipboard</td></tr>
+  <tr><td><kbd>Ctrl+click</kbd></td><td>Multi-select rows in extended selection trees</td></tr>
+  <tr><td><kbd>Shift+click</kbd></td><td>Select range of rows</td></tr>
+  <tr><td><kbd>Escape</kbd></td><td>Cancel inline edit</td></tr>
+</table>
+
+<h3>General Tips</h3>
+<ul>
+  <li><strong>Right-click everywhere</strong> — most trees have context menus with quick-set options and copy/paste.</li>
+  <li><strong>Clipboard paste</strong> — paste tab-separated data from Excel/Google Sheets into students, enrolments, and ledger.</li>
+  <li><strong>Column sorting</strong> — click any column header to sort. Click again to reverse.</li>
+  <li><strong>Auto-refresh</strong> — the app periodically refreshes all tabs (configurable interval, default 5 minutes).</li>
+  <li><strong>Status bar</strong> — shows current user, program location, and live clock.</li>
+</ul>
+</section>
+
+<!-- ===================================================================== -->
+<section id="troubleshooting">
+<h2>17. Troubleshooting</h2>
+
+<div class="card">
+  <h4>App won't start / crashes immediately</h4>
+  <p>Check the <code>app.log</code> file in the data directory for error details. Ensure all data CSV files are not locked by another program (e.g., Excel).</p>
+</div>
+
+<div class="card">
+  <h4>Data not appearing after import</h4>
+  <p>Press <kbd>F5</kbd> to reload all data from disk. Check that the data directory setting points to the correct folder.</p>
+</div>
+
+<div class="card">
+  <h4>Invoice PDF not generated</h4>
+  <p>Ensure the invoice output directory exists and is writable. Check Settings → PDF save mode and directory.</p>
+</div>
+
+<div class="card">
+  <h4>Budget not updating automatically</h4>
+  <p>Budget auto-posting only occurs on status transitions. If you manually edited the CSV, use <kbd>F5</kbd> to reload. Verify the course has a <code>cert_cost</code> set and is assigned to a budget pool.</p>
+</div>
+
+<div class="card">
+  <h4>Duplicate students appearing</h4>
+  <p>Use <strong>Merge Duplicates</strong> (auto) or <strong>Manual Merge…</strong> to consolidate records. The system matches on exact email or first+last name.</p>
+</div>
+
+<div class="card">
+  <h4>Date format issues</h4>
+  <p>All dates should be entered as DD/MM/YYYY or DD/MM/YY (auto-corrected). Internal storage uses YYYY-MM-DD but display is always DD/MM/YYYY.</p>
+</div>
+
+<div class="card">
+  <h4>Recovering deleted records</h4>
+  <p>Deleted students and enrolments are soft-deleted (marked with a flag). Enable "Show Deleted" in the register, then use <strong>Restore</strong> to recover them.</p>
+</div>
+
+<div class="card">
+  <h4>Viewing logs</h4>
+  <p>Go to <strong>Reports → Audit Log</strong> for a full history of data changes, or <strong>Reports → App Log</strong> for technical messages.</p>
+</div>
+
+<div class="danger">
+  <strong>Data Safety:</strong> Never edit CSV files directly while the application is running. Use the built-in export/import or close the app first. Always keep backups enabled.
+</div>
+</section>
+
+</div><!-- .container -->
+
+<footer>
+  <p>Invoice Generator v1.34 — Help Guide<br>
+  Generated June 2026. For the latest version, check your application's About dialog.</p>
+</footer>
+
+</body>
+</html>

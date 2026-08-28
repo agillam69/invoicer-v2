@@ -1,0 +1,65 @@
+; Inno Setup Script — Invoice Generator
+; Build with: iscc InvoiceGenerator.iss
+; Download Inno Setup from: https://jrsoftware.org/isinfo.php
+
+#define AppName "Invoice Generator"
+#define AppVersion "1.33"
+#define AppPublisher "agill"
+; Spec produces "Invoice Generator vX.XX.exe"; installs it as InvoiceGenerator.exe
+#define SourceExeName "Invoice Generator v" + AppVersion + ".exe"
+#define AppExeName "InvoiceGenerator.exe"
+#define SourceDir "..\dist"
+
+[Setup]
+AppId={{D4F2A8B1-3C7E-4F9A-B2D5-6E8F1A0C3D7E}
+AppName={#AppName}
+AppVersion={#AppVersion}
+AppPublisher={#AppPublisher}
+DefaultDirName={autopf}\{#AppName}
+DefaultGroupName={#AppName}
+OutputDir=.
+OutputBaseFilename=InvoiceGenerator_Setup_{#AppVersion}
+Compression=lzma2
+SolidCompression=yes
+WizardStyle=modern
+DisableDirPage=no
+DisableProgramGroupPage=no
+; NO data files are bundled — user imports their own via Tools > Import Data
+
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Tasks]
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+
+[Files]
+; Only the executable — NO data files. Rename versioned build to a stable name.
+Source: "{#SourceDir}\{#SourceExeName}"; DestDir: "{app}"; DestName: "{#AppExeName}"; Flags: ignoreversion
+
+[Icons]
+Name: "{group}\{#AppName}";        DestDir: "{app}"; Filename: "{app}\{#AppExeName}"
+Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\{#AppName}";  Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
+
+[Run]
+Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+
+[UninstallDelete]
+; Leave user data intact on uninstall
+Type: filesandordirs; Name: "{app}\build"
+
+[Code]
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  DataNote: string;
+begin
+  if CurStep = ssDone then
+  begin
+    DataNote := 'Installation complete.' + #13#10 + #13#10 +
+      'To bring in your existing data:' + #13#10 +
+      '1. Open the old installation and use Tools > Export All Data to create a backup zip.' + #13#10 +
+      '2. Open this new installation.' + #13#10 +
+      '3. Use Tools > Import Data and select your backup zip.';
+    MsgBox(DataNote, mbInformation, MB_OK);
+  end;
+end;

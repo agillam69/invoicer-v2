@@ -1,0 +1,44 @@
+# Receipt Generator
+
+A standalone, single-screen GUI tool for the Invoice Generator that creates a
+payment receipt PDF when an invoice has been paid.
+
+## What it does
+
+1. Reads the existing Invoice Generator CSV files (`invoices.csv`, `clients.csv`)
+   and `settings.json` (business details).
+2. Lets you enter an invoice number and click **Find / Refresh**.
+3. Auto-fills the client details from the invoice and client records.
+4. Collects the payment date, amount paid, payment method, and reference.
+5. Shows the **amount outstanding** (usually 0 for a fully paid invoice).
+6. Generates a compliant A4 PDF receipt and saves it next to the invoice PDF
+   (or in `receipts/` if no invoice PDF path exists).
+7. Opens the PDF automatically after generation.
+
+## How to run
+
+```powershell
+cd "C:\Users\agill\OneDrive\Invoicer\receipt_generator"
+python receipt_app.py
+```
+
+If your Invoice Generator data lives in a different folder, click **Browse…** and
+select the folder containing `settings.json`, `invoices.csv` and `clients.csv`.
+
+## Requirements
+
+- Python 3.9+
+- `reportlab` (same PDF library used by the main Invoice Generator)
+- Standard library modules: `csv`, `json`, `tkinter`, `datetime`, `pathlib`
+
+## Files
+
+- `receipt_app.py` — the standalone application
+- `README.md` — this file
+
+## Notes
+
+- This is intentionally separate from the main Invoice Generator. It does not
+  modify the invoice CSV or ledger; it only produces a PDF receipt.
+- For a paid invoice, enter the invoice total as the **Amount paid** so the
+  **Outstanding** shows `$0.00`.
