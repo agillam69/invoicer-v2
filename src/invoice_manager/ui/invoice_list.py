@@ -134,7 +134,9 @@ class InvoiceListPage(QWidget):
             QMessageBox.information(self, "Select invoice", "Select an invoice to cancel.")
             return
         if inv.is_cancelled or inv.is_void or inv.is_draft:
-            QMessageBox.information(self, "Cannot cancel", "Invoice is already cancelled, void, or a draft.")
+            QMessageBox.information(
+                self, "Cannot cancel", "Invoice is already cancelled, void, or a draft."
+            )
             return
         reason, ok = QInputDialog.getText(self, "Cancel Invoice", "Reason for cancellation:")
         if not ok or not reason.strip():
@@ -152,7 +154,9 @@ class InvoiceListPage(QWidget):
             QMessageBox.information(self, "Select invoice", "Select an invoice to void.")
             return
         if inv.is_void or inv.is_cancelled or inv.is_draft:
-            QMessageBox.information(self, "Cannot void", "Invoice is already void, cancelled, or a draft.")
+            QMessageBox.information(
+                self, "Cannot void", "Invoice is already void, cancelled, or a draft."
+            )
             return
         reason, ok = QInputDialog.getText(self, "Void Invoice", "Reason for voiding:")
         if not ok or not reason.strip():

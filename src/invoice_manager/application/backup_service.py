@@ -47,7 +47,7 @@ class BackupService:
             raise BackupServiceError(f"Data directory not found: {self.data_dir}")
         target = Path(backup_dir) if backup_dir else self._resolve_backup_dir()
         target.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         archive = target / f"invoice_manager_backup_{timestamp}.zip"
 
         with tempfile.TemporaryDirectory() as tmp:

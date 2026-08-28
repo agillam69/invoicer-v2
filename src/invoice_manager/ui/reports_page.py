@@ -192,9 +192,7 @@ class SummaryTab(_BaseReportTab):
 
     def _ledger_summary(self) -> list[str]:
         entries = (
-            self._context.session.query(LedgerEntry)
-            .filter(LedgerEntry.is_deleted.is_(False))
-            .all()
+            self._context.session.query(LedgerEntry).filter(LedgerEntry.is_deleted.is_(False)).all()
         )
         by_category: dict[str, int] = defaultdict(int)
         month_income = 0
@@ -236,9 +234,9 @@ class SummaryTab(_BaseReportTab):
         )
         rate = _parse_gst_rate(self._context.setting_repo.get("gst_rate"))
         if rate > 0:
-            gst_paid = (
-                (Decimal(expenses) / Decimal(100)) * rate / (Decimal(1) + rate)
-            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            gst_paid = ((Decimal(expenses) / Decimal(100)) * rate / (Decimal(1) + rate)).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
             gst_paid_cents = int(gst_paid * Decimal(100))
         else:
             gst_paid_cents = 0
@@ -304,7 +302,9 @@ class InvoicesTab(_BaseReportTab):
         layout = QVBoxLayout(self)
         filter_bar = QHBoxLayout()
         self._status_filter = QComboBox()
-        self._status_filter.addItems(["All", "Issued", "Paid", "Part paid", "Overdue", "Draft", "Cancelled", "Void"])
+        self._status_filter.addItems(
+            ["All", "Issued", "Paid", "Part paid", "Overdue", "Draft", "Cancelled", "Void"]
+        )
         self._status_filter.currentTextChanged.connect(self.refresh)
         self._client_filter = QLineEdit()
         self._client_filter.setPlaceholderText("Client name...")
@@ -445,7 +445,9 @@ class LedgerTab(_BaseReportTab):
         self._add_toolbar(layout, self.refresh, self._export)
 
         self._table = QTableWidget(0, 6)
-        self._table.setHorizontalHeaderLabels(["Date", "Type", "Category", "Description", "Amount", "Reference"])
+        self._table.setHorizontalHeaderLabels(
+            ["Date", "Type", "Category", "Description", "Amount", "Reference"]
+        )
         self._table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -547,9 +549,9 @@ class GSTTab(_BaseReportTab):
         )
         rate = _parse_gst_rate(self._context.setting_repo.get("gst_rate"))
         if rate > 0:
-            gst_paid = (
-                (Decimal(expenses) / Decimal(100)) * rate / (Decimal(1) + rate)
-            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            gst_paid = ((Decimal(expenses) / Decimal(100)) * rate / (Decimal(1) + rate)).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
             gst_paid_cents = int(gst_paid * Decimal(100))
         else:
             gst_paid_cents = 0
@@ -623,7 +625,12 @@ class AgeingTab(_BaseReportTab):
         self._rows: list[list[Any]] = []
         for bucket in ["Current", "1-30 days", "31-60 days", "61-90 days", "90+ days"]:
             self._rows.append(
-                [bucket, counts[bucket], _fmt_cents(buckets[bucket]), f"{buckets[bucket] / total * 100:.1f}%"]
+                [
+                    bucket,
+                    counts[bucket],
+                    _fmt_cents(buckets[bucket]),
+                    f"{buckets[bucket] / total * 100:.1f}%",
+                ]
             )
         self._table.setRowCount(len(self._rows))
         for r, row in enumerate(self._rows):
@@ -631,7 +638,11 @@ class AgeingTab(_BaseReportTab):
                 self._table.setItem(r, c, QTableWidgetItem(str(value)))
 
     def _export(self) -> None:
-        self._export_csv("report_ageing.csv", ["Bucket", "Invoices", "Balance", "%"], self._table_rows(self._table))
+        self._export_csv(
+            "report_ageing.csv",
+            ["Bucket", "Invoices", "Balance", "%"],
+            self._table_rows(self._table),
+        )
 
 
 class AuditTab(_BaseReportTab):

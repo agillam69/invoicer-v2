@@ -115,9 +115,7 @@ class ManualInvoiceDialog(QDialog):
     def _to_cents(self, text: str) -> int:
         try:
             return int(
-                (Decimal(text.strip() or "0") * 100).to_integral_value(
-                    rounding=ROUND_HALF_UP
-                )
+                (Decimal(text.strip() or "0") * 100).to_integral_value(rounding=ROUND_HALF_UP)
             )
         except Exception:
             return 0

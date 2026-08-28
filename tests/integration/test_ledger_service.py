@@ -59,3 +59,41 @@ def test_zero_amount_rejected(ledger_svc):
     service, session = ledger_svc
     with pytest.raises(LedgerServiceError):
         service.add_entry(date.today(), "out", "Bad", "test", 0)
+
+
+def test_update_entry(ledger_svc):
+    service, session = ledger_svc
+    entry = service.add_entry(
+        entry_date=date.today(),
+        entry_type="out",
+        category="Supplies",
+        description="Stationery",
+        amount_cents=5500,
+    )
+    service.update_entry(
+        entry=entry,
+        entry_date=date.today(),
+        entry_type="out",
+        category="Office",
+        description="Pens",
+        amount_cents=1200,
+        reference="PO-1",
+        notes="updated",
+    )
+    assert entry.category == "Office"
+    assert entry.amount_cents == 1200
+    assert entry.reference == "PO-1"
+
+
+def test_delete_entry(ledger_svc):
+    service, session = ledger_svc
+    entry = service.add_entry(
+        entry_date=date.today(),
+        entry_type="out",
+        category="Supplies",
+        description="Stationery",
+        amount_cents=5500,
+    )
+    service.delete_entry(entry, "Entered twice")
+    assert entry.is_deleted is True
+    assert len(service.list_entries()) == 0

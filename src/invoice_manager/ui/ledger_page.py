@@ -246,12 +246,15 @@ class LedgerPage(QWidget):
         )
         if not ok:
             return
-        if QMessageBox.question(
-            self,
-            "Confirm delete",
-            "Delete this ledger entry?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-        ) != QMessageBox.StandardButton.Yes:
+        if (
+            QMessageBox.question(
+                self,
+                "Confirm delete",
+                "Delete this ledger entry?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            != QMessageBox.StandardButton.Yes
+        ):
             return
         self._context.ledger_service.delete_entry(entry, reason.strip() or None)
         self._context.session.commit()
@@ -275,7 +278,17 @@ class LedgerPage(QWidget):
         try:
             with Path(path).open("w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
-                writer.writerow(["date", "entry_type", "category", "description", "amount", "reference", "notes"])
+                writer.writerow(
+                    [
+                        "date",
+                        "entry_type",
+                        "category",
+                        "description",
+                        "amount",
+                        "reference",
+                        "notes",
+                    ]
+                )
                 for entry in self._entries:
                     writer.writerow(
                         [

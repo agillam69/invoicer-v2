@@ -212,7 +212,9 @@ class SettingsDialog(QDialog):
         self.accept()
 
     def _browse_data_dir(self) -> None:
-        path = QFileDialog.getExistingDirectory(self, "Select data directory", self._data_dir.text())
+        path = QFileDialog.getExistingDirectory(
+            self, "Select data directory", self._data_dir.text()
+        )
         if path:
             self._data_dir.setText(path)
 
@@ -222,6 +224,8 @@ class SettingsDialog(QDialog):
         self._data_dir.setText(str(target))
 
     def _browse_backup_folder(self) -> None:
-        path = QFileDialog.getExistingDirectory(self, "Select backup folder", self._backup_folder.text() or self._data_dir.text())
+        path = QFileDialog.getExistingDirectory(
+            self, "Select backup folder", self._backup_folder.text() or self._data_dir.text()
+        )
         if path:
             self._backup_folder.setText(path)
