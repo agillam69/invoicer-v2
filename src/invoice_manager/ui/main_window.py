@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 from invoice_manager.application.backup_service import BackupService, BackupServiceError
 from invoice_manager.application.export_service import DataExportService, DataExportServiceError
 from invoice_manager.documents.accountant_pack_pdf import generate_accountant_pack_pdf
+from invoice_manager.documents.blank_invoice_docx import generate_blank_invoice_docx
 from invoice_manager.infrastructure.config import AppConfig
 from invoice_manager.infrastructure.logging_setup import get_logger
 from invoice_manager.ui.app_context import AppContext
@@ -176,6 +177,8 @@ class MainWindow(QMainWindow):
         accountant_action.triggered.connect(self._generate_accountant_pack)
         export_action = tools_menu.addAction("Export all data...")
         export_action.triggered.connect(self._export_all_data)
+        blank_word_action = tools_menu.addAction("Blank invoice (Word)...")
+        blank_word_action.triggered.connect(self._generate_blank_invoice_word)
         tools_menu.addSeparator()
         backup_action = tools_menu.addAction("Backup now")
         backup_action.triggered.connect(self._backup_now)
@@ -293,6 +296,57 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Export complete", f"Saved: {archive}")
         except DataExportServiceError as exc:
             QMessageBox.warning(self, "Export failed", str(exc))
+
+    def _generate_blank_invoice_word(self) -> None:
+        default_name = "blank_invoice.docx"
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save blank invoice",
+            str(self._context.config.get_exports_directory() / default_name),
+            "Word documents (*.docx)",
+        )
+        if not path:
+            return
+        settings = {k: self._context.setting_repo.get(k) for k in self._invoice_settings_keys()}
+        try:
+            generate_blank_invoice_docx(settings, Path(path))
+            QMessageBox.information(self, "Blank invoice", f"Saved: {path}")
+        except Exception as exc:  # noqa: BLE001
+            _log.exception("Blank invoice failed: %s", exc)
+            QMessageBox.warning(self, "Blank invoice failed", str(exc))
+
+    def _invoice_settings_keys(self) -> list[str]:
+        return [
+            "business_name",
+            "business_address",
+            "gst_rate",
+            "bank_name",
+            "bank_bsb",
+            "bank_account",
+            "bank_account_name",
+            "invoice_title_tax",
+            "invoice_title",
+            "invoice_date_label",
+            "invoice_due_date_label",
+            "invoice_client_label",
+            "invoice_address_label",
+            "invoice_description_header",
+            "invoice_qty_header",
+            "invoice_unit_header",
+            "invoice_price_header",
+            "invoice_gst_header",
+            "invoice_total_header",
+            "invoice_subtotal_label",
+            "invoice_gst_label",
+            "invoice_total_label",
+            "invoice_payment_details_label",
+            "invoice_bank_label",
+            "invoice_bsb_label",
+            "invoice_account_label",
+            "invoice_account_name_label",
+            "invoice_notes_label",
+            "invoice_thank_you",
+        ]
 
     def _start_backup_scheduler(self) -> None:
         self._backup_if_due()
