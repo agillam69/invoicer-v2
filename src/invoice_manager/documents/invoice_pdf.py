@@ -1,0 +1,133 @@
+"""Generate a professional A4 invoice PDF with ReportLab."""
+
+from __future__ import annotations
+
+from decimal import Decimal
+from pathlib import Path
+from typing import Any
+
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import (
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
+
+from invoice_manager.domain.money import Money
+from invoice_manager.persistence.models import Invoice
+
+
+class InvoicePDFBuilder:
+    """Build an invoice PDF from an Invoice model."""
+
+    def __init__(self, invoice: Invoice, settings: dict[str, Any]) -> None:
+        self.invoice = invoice
+        self.settings = settings
+
+    def _fmt(self, cents: int) -> str:
+        return Money(cents=cents).__str__()
+
+    def _get(self, key: str, default: str = "") -> str:
+        value = self.settings.get(key, default)
+        if value is None:
+            return ""
+        return str(value)
+
+    def build(self, output_path: Path) -> Path:
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        doc = SimpleDocTemplate(
+            str(output_path),
+            pagesize=A4,
+            rightMargin=20 * mm,
+            leftMargin=20 * mm,
+            topMargin=20 * mm,
+            bottomMargin=20 * mm,
+        )
+        styles = getSampleStyleSheet()
+        story: list[Any] = []
+
+        # Header
+        story.append(Paragraph(self._get("business_name", "Invoice"), styles["Title"]))
+        story.append(Paragraph(self._get("business_address"), styles["Normal"]))
+        story.append(Spacer(1, 6 * mm))
+
+        # Invoice meta
+        gst_rate = Decimal(self._get("gst_rate", "0.0") or "0.0")
+        doc_title = "TAX INVOICE" if gst_rate > 0 else "INVOICE"
+        story.append(Paragraph(f"<b>{doc_title}</b> — {self.invoice.number}", styles["Heading2"]))
+        meta = [
+            ["Date:", str(self.invoice.issue_date)],
+            ["Due date:", str(self.invoice.due_date or "")],
+            ["Client:", self.invoice.client_name],
+            ["Address:", self.invoice.client_address or ""],
+        ]
+        story.append(Table(meta, colWidths=[30 * mm, 120 * mm]))
+        story.append(Spacer(1, 8 * mm))
+
+        # Line items
+        data: list[list[Any]] = [["Description", "Qty", "Unit", "Price", "GST", "Total"]]
+        for item in self.invoice.items:
+            data.append(
+                [
+                    item.description,
+                    str(item.quantity),
+                    item.unit or "ea",
+                    self._fmt(item.unit_price_cents),
+                    self._fmt(item.gst_cents),
+                    self._fmt(item.total_cents),
+                ]
+            )
+        data.append(["", "", "", "Subtotal", "", self._fmt(self.invoice.subtotal_cents)])
+        data.append(["", "", "", "GST", "", self._fmt(self.invoice.gst_cents)])
+        data.append(["", "", "", "Total", "", self._fmt(self.invoice.total_cents)])
+
+        table = Table(data, colWidths=[70 * mm, 15 * mm, 20 * mm, 25 * mm, 20 * mm, 25 * mm])
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2C3E50")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                    ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTNAME", (0, -3), (-1, -1), "Helvetica-Bold"),
+                ]
+            )
+        )
+        story.append(table)
+        story.append(Spacer(1, 8 * mm))
+
+        # Payment details / notes
+        bank_name = self._get("bank_name")
+        bsb = self._get("bank_bsb")
+        account = self._get("bank_account")
+        account_name = self._get("bank_account_name")
+        if bank_name or account:
+            story.append(Paragraph("<b>Payment details</b>", styles["Heading3"]))
+            story.append(
+                Paragraph(
+                    f"Bank: {bank_name}  |  BSB: {bsb}  |  Account: {account}  |  Name: {account_name}",
+                    styles["Normal"],
+                )
+            )
+            story.append(Spacer(1, 4 * mm))
+        if self.invoice.notes:
+            story.append(Paragraph(f"<b>Notes:</b> {self.invoice.notes}", styles["Normal"]))
+        thank_you = self._get("thank_you_note", "Thank you for your business!")
+        if thank_you:
+            story.append(Spacer(1, 8 * mm))
+            story.append(Paragraph(thank_you, styles["Normal"]))
+
+        doc.build(story)
+        return output_path
+
+
+def generate_invoice_pdf(invoice: Invoice, settings: dict[str, Any], output_path: Path) -> Path:
+    return InvoicePDFBuilder(invoice, settings).build(output_path)
