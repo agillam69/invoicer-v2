@@ -73,6 +73,18 @@ class AppConfig:
             return path
         return self.base_dir
 
+    def get_backup_directory(self) -> Path:
+        return self.backups_dir
+
+    def get_documents_directory(self) -> Path:
+        return self.documents_dir
+
+    def get_exports_directory(self) -> Path:
+        return self.exports_dir
+
+    def get_logs_directory(self) -> Path:
+        return self.logs_dir
+
     def set_data_directory(self, path: Path) -> None:
         cfg = self.load()
         cfg["data_dir"] = str(Path(path))

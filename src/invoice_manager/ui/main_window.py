@@ -2,20 +2,25 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
+    QFileDialog,
     QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
     QMenuBar,
+    QMessageBox,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from invoice_manager.application.backup_service import BackupService, BackupServiceError
 from invoice_manager.infrastructure.config import AppConfig
 from invoice_manager.infrastructure.logging_setup import get_logger
 from invoice_manager.ui.app_context import AppContext
@@ -132,6 +137,10 @@ class MainWindow(QMainWindow):
         tools_menu = menu_bar.addMenu("Tools")
         import_action = tools_menu.addAction("Import / Migrate")
         import_action.triggered.connect(self._open_migration_wizard)
+        backup_action = tools_menu.addAction("Backup now")
+        backup_action.triggered.connect(self._backup_now)
+        restore_action = tools_menu.addAction("Restore from backup...")
+        restore_action.triggered.connect(self._restore_backup)
         self.setMenuBar(menu_bar)
 
     def _open_migration_wizard(self) -> None:
@@ -144,6 +153,44 @@ class MainWindow(QMainWindow):
             invoices_page = self._pages[2]
             if isinstance(invoices_page, InvoiceListPage):
                 invoices_page.refresh()
+
+    def _backup_now(self) -> None:
+        try:
+            service = BackupService(
+                self._context.config.get_data_directory(),
+                self._context.config.get_backup_directory(),
+            )
+            path = service.backup()
+            QMessageBox.information(self, "Backup complete", f"Saved: {path}")
+        except BackupServiceError as exc:
+            QMessageBox.warning(self, "Backup failed", str(exc))
+
+    def _restore_backup(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select backup zip",
+            str(self._context.config.get_backup_directory()),
+            "Zip files (*.zip)",
+        )
+        if not path:
+            return
+        reply = QMessageBox.question(
+            self,
+            "Confirm restore",
+            "This will overwrite the current data with the backup.\nA safety copy will be made first. Continue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            service = BackupService(
+                self._context.config.get_data_directory(),
+                self._context.config.get_backup_directory(),
+            )
+            service.restore(Path(path))
+            QMessageBox.information(self, "Restore complete", "Please restart the application.")
+        except BackupServiceError as exc:
+            QMessageBox.critical(self, "Restore failed", str(exc))
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
         self._context.session.close()
