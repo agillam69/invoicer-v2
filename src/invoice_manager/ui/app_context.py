@@ -1,0 +1,56 @@
+"""Shared application context for UI pages."""
+
+from __future__ import annotations
+
+from decimal import Decimal
+
+from invoice_manager.application.invoice_service import InvoiceService
+from invoice_manager.application.ledger_service import LedgerService
+from invoice_manager.infrastructure.audit import AuditService
+from invoice_manager.infrastructure.config import AppConfig
+from invoice_manager.infrastructure.file_store import FileStore
+from invoice_manager.persistence.database import Database
+from invoice_manager.persistence.repositories import (
+    AuditRepository,
+    ClientRepository,
+    InvoiceRepository,
+    LedgerRepository,
+    PaymentRepository,
+    SettingRepository,
+)
+
+
+class AppContext:
+    """Holds database session, config, file store, and application services."""
+
+    def __init__(self, config: AppConfig, current_user: str) -> None:
+        self.config = config
+        self.current_user = current_user
+        self.database = Database(config.db_path())
+        self.database.create_schema()
+        self.session = self.database.new_session()
+        self.file_store = FileStore(config.get_data_directory())
+
+        self.client_repo = ClientRepository(self.session)
+        self.invoice_repo = InvoiceRepository(self.session)
+        self.payment_repo = PaymentRepository(self.session)
+        self.ledger_repo = LedgerRepository(self.session)
+        self.setting_repo = SettingRepository(self.session)
+
+        self.audit = AuditService(
+            repository=AuditRepository(self.session),
+            current_user=current_user,
+        )
+
+        gst_rate = Decimal(self.setting_repo.get("gst_rate") or "0.0")
+        payment_terms = int(self.setting_repo.get("payment_terms_days") or 7)
+        self.invoice_service = InvoiceService(
+            invoice_repo=self.invoice_repo,
+            client_repo=self.client_repo,
+            payment_repo=self.payment_repo,
+            setting_repo=self.setting_repo,
+            audit=self.audit,
+            gst_rate=gst_rate,
+            payment_terms_days=payment_terms,
+        )
+        self.ledger_service = LedgerService(self.ledger_repo, self.audit)

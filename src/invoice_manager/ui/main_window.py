@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -17,10 +18,12 @@ from PySide6.QtWidgets import (
 
 from invoice_manager.infrastructure.config import AppConfig
 from invoice_manager.infrastructure.logging_setup import get_logger
+from invoice_manager.ui.app_context import AppContext
+from invoice_manager.ui.invoice_list import InvoiceListPage
+from invoice_manager.ui.ledger_page import LedgerPage
 from invoice_manager.ui.migration_wizard import MigrationWizard
 
 _log = get_logger("invoice_manager.ui.main_window")
-
 
 _NAV_ITEMS = [
     "Dashboard",
@@ -39,6 +42,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self._config = config
         self._current_user = current_user
+        self._context = AppContext(config, current_user)
         self.setWindowTitle("Invoice & Receipt Manager")
         self.setMinimumSize(1200, 800)
         self._build_ui()
@@ -73,12 +77,34 @@ class MainWindow(QMainWindow):
 
         # Content area
         self._stack = QStackedWidget()
+        self._pages: list[QWidget] = []
         for label in _NAV_ITEMS:
-            page = self._placeholder_page(label)
+            page = self._create_page(label)
+            self._pages.append(page)
             self._stack.addWidget(page)
         layout.addWidget(self._stack, stretch=1)
 
         self._build_menu()
+
+    def _create_page(self, label: str) -> QWidget:
+        if label == "Invoices":
+            return InvoiceListPage(self._context)
+        if label == "Income & Expenses":
+            return LedgerPage(self._context)
+        return self._placeholder_page(label)
+
+    def _placeholder_page(self, label: str) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.addWidget(QLabel(f"<h1>{label}</h1><p>This screen is under construction.</p>"))
+        layout.addStretch()
+        return page
+
+    def _on_nav_changed(self, index: int) -> None:
+        self._stack.setCurrentIndex(index)
+        page = self._pages[index]
+        if hasattr(page, "refresh"):
+            page.refresh()
 
     def _build_menu(self) -> None:
         menu_bar = QMenuBar(self)
@@ -91,12 +117,7 @@ class MainWindow(QMainWindow):
         wizard = MigrationWizard(self._config, parent=self)
         wizard.exec()
 
-    def _placeholder_page(self, label: str) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.addWidget(QLabel(f"<h1>{label}</h1><p>This screen is under construction.</p>"))
-        layout.addStretch()
-        return page
-
-    def _on_nav_changed(self, index: int) -> None:
-        self._stack.setCurrentIndex(index)
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
+        self._context.session.close()
+        self._context.database.engine.dispose()
+        event.accept()
