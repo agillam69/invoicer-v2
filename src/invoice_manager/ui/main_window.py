@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QMenuBar,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -16,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from invoice_manager.infrastructure.config import AppConfig
 from invoice_manager.infrastructure.logging_setup import get_logger
+from invoice_manager.ui.migration_wizard import MigrationWizard
 
 _log = get_logger("invoice_manager.ui.main_window")
 
@@ -75,6 +77,19 @@ class MainWindow(QMainWindow):
             page = self._placeholder_page(label)
             self._stack.addWidget(page)
         layout.addWidget(self._stack, stretch=1)
+
+        self._build_menu()
+
+    def _build_menu(self) -> None:
+        menu_bar = QMenuBar(self)
+        tools_menu = menu_bar.addMenu("Tools")
+        import_action = tools_menu.addAction("Import / Migrate")
+        import_action.triggered.connect(self._open_migration_wizard)
+        self.setMenuBar(menu_bar)
+
+    def _open_migration_wizard(self) -> None:
+        wizard = MigrationWizard(self._config, parent=self)
+        wizard.exec()
 
     def _placeholder_page(self, label: str) -> QWidget:
         page = QWidget()
