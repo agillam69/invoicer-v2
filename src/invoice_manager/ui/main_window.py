@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
@@ -9,6 +10,7 @@ from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QListWidget,
     QListWidgetItem,
@@ -21,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from invoice_manager.application.backup_service import BackupService, BackupServiceError
+from invoice_manager.documents.accountant_pack_pdf import generate_accountant_pack_pdf
 from invoice_manager.infrastructure.config import AppConfig
 from invoice_manager.infrastructure.logging_setup import get_logger
 from invoice_manager.ui.app_context import AppContext
@@ -139,6 +142,9 @@ class MainWindow(QMainWindow):
         tools_menu = menu_bar.addMenu("Tools")
         import_action = tools_menu.addAction("Import / Migrate")
         import_action.triggered.connect(self._open_migration_wizard)
+        accountant_action = tools_menu.addAction("Accountant pack...")
+        accountant_action.triggered.connect(self._generate_accountant_pack)
+        tools_menu.addSeparator()
         backup_action = tools_menu.addAction("Backup now")
         backup_action.triggered.connect(self._backup_now)
         restore_action = tools_menu.addAction("Restore from backup...")
@@ -162,6 +168,44 @@ class MainWindow(QMainWindow):
             invoices_page = self._pages[2]
             if isinstance(invoices_page, InvoiceListPage):
                 invoices_page.refresh()
+
+    def _generate_accountant_pack(self) -> None:
+        now = datetime.now().year
+        current_fy = f"{now}-{now + 1}" if datetime.now().month >= 7 else f"{now - 1}-{now}"
+        fy, ok = QInputDialog.getText(
+            self,
+            "Accountant Pack",
+            "Financial year (e.g. 2025-2026):",
+            text=current_fy,
+        )
+        if not ok or not fy.strip():
+            return
+        default_name = f"accountant_pack_{fy.strip()}.pdf"
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save accountant pack",
+            str(self._context.config.get_exports_directory() / default_name),
+            "PDF files (*.pdf)",
+        )
+        if not path:
+            return
+        try:
+            settings = {
+                k: self._context.setting_repo.get(k)
+                for k in [
+                    "business_name",
+                    "business_abn",
+                    "currency_symbol",
+                    "report_header_colour",
+                    "report_stripe_colour",
+                    "gst_rate",
+                ]
+            }
+            generate_accountant_pack_pdf(Path(path), fy.strip(), self._context, settings)
+            QMessageBox.information(self, "Accountant pack", f"Saved: {path}")
+        except Exception as exc:  # noqa: BLE001
+            _log.exception("Accountant pack failed: %s", exc)
+            QMessageBox.warning(self, "Accountant pack failed", str(exc))
 
     def _start_backup_scheduler(self) -> None:
         self._backup_if_due()
