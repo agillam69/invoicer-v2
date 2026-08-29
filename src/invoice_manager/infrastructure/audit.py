@@ -35,5 +35,8 @@ class AuditService:
             detail=detail_str,
         )
 
+    def list_for_record(self, table_name: str, record_id: int) -> list[Any]:
+        return self._repo.list_for_record(table_name, record_id)
+
     def set_user(self, username: str) -> None:
         self._user = username

@@ -291,6 +291,30 @@ class InvoiceService:
         )
         return credit
 
+    def clone_invoice(self, invoice: Invoice) -> Invoice:
+        """Create a new draft invoice copied from an existing invoice."""
+        if invoice.client_id is None:
+            raise InvoiceServiceError("Cannot clone an invoice without a linked client")
+        draft = self.create_draft(
+            client_id=invoice.client_id,
+            invoice_date=cast(date, invoice.issue_date),
+            due_date=cast(date, invoice.due_date),
+            notes=invoice.notes,
+        )
+        for item in invoice.items:
+            self.add_line(
+                draft,
+                item.description,
+                item.quantity,
+                item.unit_price_cents,
+                item.taxable,
+                item.discount_cents,
+            )
+        self._audit.record(
+            "invoice_cloned", "invoices", draft.id, {"source": invoice.number}
+        )
+        return draft
+
     def recalc(self, invoice: Invoice) -> None:
         """Recalculate totals and status for an existing invoice."""
         self._recalc(invoice)

@@ -9,10 +9,12 @@ from typing import Any, cast
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
     QHBoxLayout,
     QHeaderView,
     QInputDialog,
     QLabel,
+    QLineEdit,
     QMenu,
     QMessageBox,
     QPushButton,
@@ -25,10 +27,13 @@ from PySide6.QtWidgets import (
 from invoice_manager.documents.invoice_docx import generate_invoice_docx
 from invoice_manager.documents.invoice_pdf import generate_invoice_pdf
 from invoice_manager.documents.invoice_xlsx import generate_invoice_xlsx
+from invoice_manager.documents.reminder_pdf import generate_reminder_pdf
+from invoice_manager.domain.money import Money
 from invoice_manager.persistence.models import Invoice
 from invoice_manager.ui.app_context import AppContext
 from invoice_manager.ui.credit_note_dialog import CreditNoteDialog
 from invoice_manager.ui.invoice_editor import InvoiceEditorDialog
+from invoice_manager.ui.invoice_history_dialog import InvoiceHistoryDialog
 from invoice_manager.ui.manual_invoice_dialog import ManualInvoiceDialog
 from invoice_manager.ui.payments_page import IssueReceiptDialog, RecordPaymentDialog
 
@@ -60,6 +65,25 @@ class InvoiceListPage(QWidget):
         toolbar.addStretch()
         layout.addLayout(toolbar)
 
+        filter_bar = QHBoxLayout()
+        self._filter_text = QLineEdit()
+        self._filter_text.setPlaceholderText("Filter by number or client...")
+        self._filter_text.textChanged.connect(self._apply_filter)
+        self._status_filter = QComboBox()
+        self._status_filter.addItems(
+            ["All", "Draft", "Issued", "PartPaid", "Paid", "Overdue", "Cancelled", "Void"]
+        )
+        self._status_filter.currentTextChanged.connect(self._apply_filter)
+        clear_btn = QPushButton("Clear")
+        clear_btn.clicked.connect(self._clear_filter)
+        filter_bar.addWidget(QLabel("Search:"))
+        filter_bar.addWidget(self._filter_text)
+        filter_bar.addWidget(QLabel("Status:"))
+        filter_bar.addWidget(self._status_filter)
+        filter_bar.addWidget(clear_btn)
+        filter_bar.addStretch()
+        layout.addLayout(filter_bar)
+
         self._table = QTableWidget(0, 8)
         self._table.setHorizontalHeaderLabels(
             ["Number", "Date", "Due", "Client", "Total", "Balance", "Status", "PDF"]
@@ -75,6 +99,10 @@ class InvoiceListPage(QWidget):
         action_bar = QHBoxLayout()
         edit_btn = QPushButton("Edit")
         edit_btn.clicked.connect(self._edit_invoice)
+        dup_btn = QPushButton("Duplicate")
+        dup_btn.clicked.connect(self._duplicate_invoice)
+        history_btn = QPushButton("History")
+        history_btn.clicked.connect(self._show_history)
         open_pdf_btn = QPushButton("Open PDF")
         open_pdf_btn.clicked.connect(self._open_pdf)
         xlsx_btn = QPushButton("Excel")
@@ -90,6 +118,8 @@ class InvoiceListPage(QWidget):
         regen_btn = QPushButton("Regenerate PDF")
         regen_btn.clicked.connect(self._regenerate_pdf)
         action_bar.addWidget(edit_btn)
+        action_bar.addWidget(dup_btn)
+        action_bar.addWidget(history_btn)
         action_bar.addWidget(open_pdf_btn)
         action_bar.addWidget(xlsx_btn)
         action_bar.addWidget(docx_btn)
@@ -101,7 +131,25 @@ class InvoiceListPage(QWidget):
         layout.addLayout(action_bar)
 
     def refresh(self) -> None:
-        self._invoices = list(self._context.invoice_service.list_invoices())
+        self._all_invoices = list(self._context.invoice_service.list_invoices())
+        self._apply_filter()
+
+    def _balance(self, inv: Invoice) -> int:
+        return (
+            inv.total_cents
+            - sum(p.amount_cents for p in inv.payments if not p.is_reversed)
+            - sum(c.amount_cents for c in inv.credits)
+        )
+
+    def _apply_filter(self) -> None:
+        text = self._filter_text.text().strip().lower()
+        status = self._status_filter.currentText()
+        self._invoices = [
+            inv
+            for inv in self._all_invoices
+            if (not text or text in inv.number.lower() or text in inv.client_name.lower())
+            and (status == "All" or inv.status == status)
+        ]
         self._table.setRowCount(len(self._invoices))
         for row, inv in enumerate(self._invoices):
             self._table.setItem(row, 0, QTableWidgetItem(inv.number))
@@ -109,14 +157,16 @@ class InvoiceListPage(QWidget):
             self._table.setItem(row, 2, QTableWidgetItem(str(inv.due_date or "")))
             self._table.setItem(row, 3, QTableWidgetItem(inv.client_name))
             self._table.setItem(row, 4, QTableWidgetItem(f"${inv.total_cents / 100:.2f}"))
-            balance = inv.total_cents - sum(
-                p.amount_cents for p in inv.payments if not p.is_reversed
-            )
-            self._table.setItem(row, 5, QTableWidgetItem(f"${balance / 100:.2f}"))
+            self._table.setItem(row, 5, QTableWidgetItem(f"${self._balance(inv) / 100:.2f}"))
             status_item = QTableWidgetItem(inv.status)
             status_item.setData(Qt.ItemDataRole.UserRole, inv.id)
             self._table.setItem(row, 6, status_item)
             self._table.setItem(row, 7, QTableWidgetItem("Yes" if inv.pdf_path else "No"))
+
+    def _clear_filter(self) -> None:
+        self._filter_text.clear()
+        self._status_filter.setCurrentIndex(0)
+        self._apply_filter()
 
     def _selected_invoice(self) -> Invoice | None:
         rows = self._table.selectedIndexes()
@@ -321,6 +371,93 @@ class InvoiceListPage(QWidget):
         except Exception as exc:  # noqa: BLE001
             QMessageBox.warning(self, "PDF failed", str(exc))
 
+    def _show_history(self) -> None:
+        inv = self._selected_invoice()
+        if inv is None:
+            QMessageBox.information(self, "Select invoice", "Select an invoice to view history.")
+            return
+        dlg = InvoiceHistoryDialog(self._context, invoice=inv, parent=self)
+        dlg.exec()
+
+    def _duplicate_invoice(self) -> None:
+        inv = self._selected_invoice()
+        if inv is None:
+            QMessageBox.information(self, "Select invoice", "Select an invoice to duplicate.")
+            return
+        try:
+            draft = self._context.invoice_service.clone_invoice(inv)
+            self._context.session.commit()
+            self.refresh()
+            QMessageBox.information(
+                self, "Duplicated", f"Created draft {draft.number} from {inv.number}."
+            )
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Duplicate failed", str(exc))
+
+    def _generate_reminder(self) -> None:
+        inv = self._selected_invoice()
+        if inv is None:
+            QMessageBox.information(self, "Select invoice", "Select an invoice.")
+            return
+        if inv.is_draft or inv.is_void or inv.is_cancelled:
+            QMessageBox.information(
+                self, "Cannot remind", "Only issued invoices can receive reminders."
+            )
+            return
+        try:
+            settings = {
+                k: self._context.setting_repo.get(k)
+                for k in [
+                    "business_name",
+                    "business_address",
+                    "bank_name",
+                    "bank_bsb",
+                    "bank_account",
+                    "bank_account_name",
+                    "report_footer",
+                ]
+            }
+            reminder_path = (
+                self._context.config.get_data_directory()
+                / "documents"
+                / "reminders"
+                / str(cast(date, inv.issue_date).year)
+                / f"{inv.number}_reminder.pdf"
+            )
+            generate_reminder_pdf(inv, settings, reminder_path)
+            QMessageBox.information(self, "Reminder saved", f"Saved {reminder_path}")
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Reminder failed", str(exc))
+
+    def _write_off_balance(self) -> None:
+        inv = self._selected_invoice()
+        if inv is None:
+            QMessageBox.information(self, "Select invoice", "Select an invoice.")
+            return
+        if inv.is_draft or inv.is_void or inv.is_cancelled:
+            QMessageBox.information(
+                self, "Cannot write off", "Only issued invoices can be written off."
+            )
+            return
+        balance = self._balance(inv)
+        if balance <= 0:
+            QMessageBox.information(self, "No balance", "This invoice has no outstanding balance.")
+            return
+        reason, ok = QInputDialog.getText(
+            self, "Write off balance", f"Reason for writing off {Money(cents=balance)}:"
+        )
+        if not ok or not reason.strip():
+            return
+        try:
+            self._context.invoice_service.add_credit_note(
+                inv, balance, reason.strip(), date.today()
+            )
+            self._context.session.commit()
+            self.refresh()
+            QMessageBox.information(self, "Written off", f"Credited {Money(cents=balance)}.")
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Write-off failed", str(exc))
+
     def selected_invoice(self) -> Invoice | None:
         return self._selected_invoice()
 
@@ -410,9 +547,14 @@ class InvoiceListPage(QWidget):
             return
         menu = QMenu(self)
         menu.addAction("Edit", self._edit_invoice)
+        menu.addAction("Duplicate", self._duplicate_invoice)
+        menu.addAction("History", self._show_history)
+        menu.addSeparator()
         menu.addAction("Record payment", self.record_payment_selected)
         menu.addAction("Issue receipt", self.issue_receipt_selected)
         menu.addAction("Credit note", self._credit_note)
+        menu.addAction("Write off balance", self._write_off_balance)
+        menu.addAction("Reminder", self._generate_reminder)
         menu.addSeparator()
         menu.addAction("Retract to draft", self.retract_selected)
         menu.addAction("Reissue", self.reissue_selected)

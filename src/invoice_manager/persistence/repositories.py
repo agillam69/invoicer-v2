@@ -95,6 +95,14 @@ class AuditRepository:
             self._session.query(AuditLog).order_by(AuditLog.timestamp.desc()).limit(limit).all()
         )
 
+    def list_for_record(self, table_name: str, record_id: int) -> list[AuditLog]:
+        return list(
+            self._session.query(AuditLog)
+            .filter(AuditLog.table_name == table_name, AuditLog.record_id == record_id)
+            .order_by(AuditLog.timestamp.desc())
+            .all()
+        )
+
 
 class ClientRepository:
     def __init__(self, session: Session) -> None:
