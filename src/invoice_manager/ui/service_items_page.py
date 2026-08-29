@@ -57,7 +57,7 @@ class ServiceItemDialog(QDialog):
         form.addRow("Unit price ($):", self._price)
 
         self._taxable = QCheckBox("Taxable")
-        self._taxable.setChecked(True)
+        self._taxable.setChecked(self._context.setting_repo.get("default_taxable") == "1")
         form.addRow(self._taxable)
 
         layout.addLayout(form)

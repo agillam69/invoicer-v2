@@ -106,6 +106,7 @@ class MainWindow(QMainWindow):
             if isinstance(page, InvoiceListPage):
                 self._invoices_page = page
         layout.addWidget(self._stack, stretch=1)
+        self._context.data_changed.connect(self._refresh_all_pages)
 
         self._build_menu()
 
@@ -132,6 +133,12 @@ class MainWindow(QMainWindow):
         layout.addWidget(QLabel(f"<h1>{label}</h1><p>This screen is under construction.</p>"))
         layout.addStretch()
         return page
+
+    def _refresh_all_pages(self) -> None:
+        for page in self._pages:
+            refresh = getattr(page, "refresh", None)
+            if callable(refresh):
+                refresh()
 
     def _on_nav_changed(self, index: int) -> None:
         label = _NAV_ITEMS[index]

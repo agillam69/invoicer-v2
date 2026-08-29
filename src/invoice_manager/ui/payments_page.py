@@ -155,7 +155,6 @@ class RecordPaymentDialog(QDialog):
         generate_receipt_pdf(payment, invoice, settings, receipt_path)
         payment.pdf_path = str(receipt_path)
         self._context.session.commit()
-        os.startfile(str(receipt_path))
 
 
 class IssueReceiptDialog(QDialog):

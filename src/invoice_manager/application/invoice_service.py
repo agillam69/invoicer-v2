@@ -100,6 +100,40 @@ class InvoiceService:
         self._audit.record("draft_created", "invoices", invoice.id, {"client": client.name})
         return invoice
 
+    def create_custom_draft(
+        self,
+        client_name: str,
+        client_address: str | None = None,
+        invoice_date: date | None = None,
+        due_date: date | None = None,
+        notes: str | None = None,
+    ) -> Invoice:
+        """Create a draft using one-off client details without saving a client."""
+        name = client_name.strip()
+        if not name:
+            raise InvoiceServiceError("Client name is required")
+        issue_date = invoice_date or date.today()
+        due = due_date or (issue_date + timedelta(days=self._payment_terms_days))
+        invoice = self._invoice_repo.create(
+            number="DRAFT",
+            sequence_number=-1,
+            issue_date=issue_date,
+            due_date=due,
+            client_id=None,
+            client_name=name,
+            client_address=client_address.strip() if client_address else None,
+            notes=notes,
+            subtotal_cents=0,
+            gst_cents=0,
+            total_cents=0,
+            is_draft=True,
+            is_void=False,
+            is_cancelled=False,
+            status="draft",
+        )
+        self._audit.record("draft_created", "invoices", invoice.id, {"client": name})
+        return invoice
+
     def add_line(
         self,
         invoice: Invoice,

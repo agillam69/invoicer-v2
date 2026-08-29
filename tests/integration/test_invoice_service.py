@@ -51,6 +51,21 @@ def test_create_draft(invoice_deps):
     assert inv.status == InvoiceStatus.DRAFT.value
 
 
+def test_create_custom_draft_without_saved_client(invoice_deps):
+    service, _client, _session = invoice_deps
+    inv = service.create_custom_draft("One-off Customer", "1 Custom Street")
+    assert inv.client_id is None
+    assert inv.client_name == "One-off Customer"
+    assert inv.client_address == "1 Custom Street"
+    assert inv.is_draft is True
+
+
+def test_create_custom_draft_requires_name(invoice_deps):
+    service, _client, _session = invoice_deps
+    with pytest.raises(InvoiceServiceError):
+        service.create_custom_draft("  ")
+
+
 def test_add_line_recalculates_totals(invoice_deps):
     service, client, session = invoice_deps
     inv = service.create_draft(client.id)

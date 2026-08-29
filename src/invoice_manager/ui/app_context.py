@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from PySide6.QtCore import QObject, Signal
+from sqlalchemy import event
+
 from invoice_manager.application.invoice_service import InvoiceService
 from invoice_manager.application.ledger_service import LedgerService
 from invoice_manager.application.payment_service import PaymentService
@@ -22,15 +25,19 @@ from invoice_manager.persistence.repositories import (
 )
 
 
-class AppContext:
+class AppContext(QObject):
     """Holds database session, config, file store, and application services."""
 
+    data_changed = Signal()
+
     def __init__(self, config: AppConfig, current_user: str) -> None:
+        super().__init__()
         self.config = config
         self.current_user = current_user
         self.database = Database(config.db_path())
         self.database.create_schema()
         self.session = self.database.new_session()
+        event.listen(self.session, "after_commit", lambda _session: self.data_changed.emit())
         self.file_store = FileStore(config.get_data_directory())
 
         self.client_repo = ClientRepository(self.session)

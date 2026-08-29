@@ -71,9 +71,17 @@ class InvoiceListPage(QWidget):
         self._filter_text.setPlaceholderText("Filter by number or client...")
         self._filter_text.textChanged.connect(self._apply_filter)
         self._status_filter = QComboBox()
-        self._status_filter.addItems(
-            ["All", "Draft", "Issued", "PartPaid", "Paid", "Overdue", "Cancelled", "Void"]
-        )
+        self._status_filter.addItem("All", None)
+        for label, value in [
+            ("Draft", "draft"),
+            ("Issued", "issued"),
+            ("Part paid", "part_paid"),
+            ("Paid", "paid"),
+            ("Overdue", "overdue"),
+            ("Cancelled", "cancelled"),
+            ("Void", "void"),
+        ]:
+            self._status_filter.addItem(label, value)
         self._status_filter.currentTextChanged.connect(self._apply_filter)
         clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(self._clear_filter)
@@ -144,12 +152,12 @@ class InvoiceListPage(QWidget):
 
     def _apply_filter(self) -> None:
         text = self._filter_text.text().strip().lower()
-        status = self._status_filter.currentText()
+        status = self._status_filter.currentData()
         self._invoices = [
             inv
             for inv in self._all_invoices
             if (not text or text in inv.number.lower() or text in inv.client_name.lower())
-            and (status == "All" or inv.status == status)
+            and (status is None or inv.status == status)
         ]
         self._table.setRowCount(len(self._invoices))
         for row, inv in enumerate(self._invoices):
@@ -159,10 +167,48 @@ class InvoiceListPage(QWidget):
             self._table.setItem(row, 3, QTableWidgetItem(inv.client_name))
             self._table.setItem(row, 4, QTableWidgetItem(f"${inv.total_cents / 100:.2f}"))
             self._table.setItem(row, 5, QTableWidgetItem(f"${self._balance(inv) / 100:.2f}"))
-            status_item = QTableWidgetItem(inv.status)
-            status_item.setData(Qt.ItemDataRole.UserRole, inv.id)
-            self._table.setItem(row, 6, status_item)
+            status_combo = QComboBox()
+            status_combo.addItem(inv.status.replace("_", " ").title(), inv.status)
+            if inv.is_draft:
+                status_combo.addItem("Issued", "issued")
+            elif not inv.is_void and not inv.is_cancelled:
+                if not inv.payments and not inv.credits:
+                    status_combo.addItem("Draft", "draft")
+                status_combo.addItem("Cancelled", "cancelled")
+                status_combo.addItem("Void", "void")
+            status_combo.currentIndexChanged.connect(
+                lambda _index, invoice=inv, combo=status_combo: self._change_status(invoice, combo)
+            )
+            self._table.setCellWidget(row, 6, status_combo)
             self._table.setItem(row, 7, QTableWidgetItem("Yes" if inv.pdf_path else "No"))
+
+    def _change_status(self, invoice: Invoice, combo: QComboBox) -> None:
+        if combo.currentIndex() == 0:
+            return
+        target = combo.currentData()
+        try:
+            if target == "issued":
+                self._context.invoice_service.issue(invoice)
+            elif target == "draft":
+                self._context.invoice_service.retract(invoice)
+            elif target in {"cancelled", "void"}:
+                reason, ok = QInputDialog.getText(
+                    self,
+                    f"Mark {target}",
+                    f"Reason for marking {invoice.number} {target}:",
+                )
+                if not ok or not reason.strip():
+                    combo.setCurrentIndex(0)
+                    return
+                if target == "cancelled":
+                    self._context.invoice_service.cancel(invoice, reason.strip())
+                else:
+                    self._context.invoice_service.void(invoice, reason.strip())
+            self._context.session.commit()
+        except Exception as exc:  # noqa: BLE001
+            self._context.session.rollback()
+            QMessageBox.warning(self, "Status change failed", str(exc))
+        self.refresh()
 
     def _clear_filter(self) -> None:
         self._filter_text.clear()

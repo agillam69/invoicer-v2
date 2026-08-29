@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QInputDialog,
     QLabel,
+    QLineEdit,
     QMenu,
     QMessageBox,
     QPushButton,
@@ -39,7 +40,9 @@ from invoice_manager.domain.invoices import calculate_line_total
 from invoice_manager.domain.money import Money
 from invoice_manager.persistence.models import Client, Invoice
 from invoice_manager.ui.app_context import AppContext
+from invoice_manager.ui.clients_page import ClientDialog
 from invoice_manager.ui.invoice_history_dialog import InvoiceHistoryDialog
+from invoice_manager.ui.service_items_page import ServiceItemDialog
 
 
 class InvoiceEditorDialog(QDialog):
@@ -67,9 +70,25 @@ class InvoiceEditorDialog(QDialog):
         layout = QVBoxLayout(self)
 
         form = QFormLayout()
+        client_widget = QWidget()
+        client_layout = QHBoxLayout(client_widget)
+        client_layout.setContentsMargins(0, 0, 0, 0)
         self._client = QComboBox()
-        self._client.setEditable(False)
-        form.addRow("Client:", self._client)
+        self._client.setEditable(True)
+        self._client.setPlaceholderText("Select or type a one-off client name")
+        self._client.currentIndexChanged.connect(self._client_changed)
+        client_layout.addWidget(self._client, stretch=1)
+        add_client_btn = QPushButton("Add")
+        add_client_btn.clicked.connect(self._add_client)
+        client_layout.addWidget(add_client_btn)
+        edit_client_btn = QPushButton("Edit")
+        edit_client_btn.clicked.connect(self._edit_client)
+        client_layout.addWidget(edit_client_btn)
+        form.addRow("Client:", client_widget)
+
+        self._client_address = QLineEdit()
+        self._client_address.setPlaceholderText("Address for this invoice (optional)")
+        form.addRow("Client address:", self._client_address)
 
         self._issue_date = QDateEdit()
         self._issue_date.setCalendarPopup(True)
@@ -94,6 +113,12 @@ class InvoiceEditorDialog(QDialog):
         add_service_btn = QPushButton("Add to invoice")
         add_service_btn.clicked.connect(self._add_service_line)
         service_layout.addWidget(add_service_btn)
+        new_service_btn = QPushButton("New")
+        new_service_btn.clicked.connect(self._add_service)
+        service_layout.addWidget(new_service_btn)
+        edit_service_btn = QPushButton("Edit")
+        edit_service_btn.clicked.connect(self._edit_service)
+        service_layout.addWidget(edit_service_btn)
         form.addRow("Service:", service_widget)
 
         layout.addLayout(form)
@@ -147,27 +172,83 @@ class InvoiceEditorDialog(QDialog):
         if self._invoice is None:
             self._add_line()
 
-    def _load_clients(self) -> None:
+    def _load_clients(self, selected_id: int | None = None) -> None:
+        current_text = self._client.currentText()
         self._clients = self._context.client_repo.list_active()
+        self._client.blockSignals(True)
+        self._client.clear()
+        self._client.addItem("", None)
         for client in self._clients:
             self._client.addItem(client.name, client.id)
-        if self._clients:
+        if selected_id is not None:
+            index = self._client.findData(selected_id)
+            self._client.setCurrentIndex(index if index >= 0 else 0)
+        elif current_text:
+            self._client.setEditText(current_text)
+        else:
             self._client.setCurrentIndex(0)
-            self._update_due_date()
+        self._client.blockSignals(False)
+        self._client_changed()
+        self._update_due_date()
         self._issue_date.dateChanged.connect(self._update_due_date)
 
-    def _load_services(self) -> None:
+    def _load_services(self, selected_id: int | None = None) -> None:
+        self._service_combo.clear()
+        self._service_combo.addItem("-- select a service --", 0)
         for item in self._context.service_repo.list_active():
             self._service_combo.addItem(item.description, item.id)
+        if selected_id is not None:
+            index = self._service_combo.findData(selected_id)
+            self._service_combo.setCurrentIndex(index if index >= 0 else 0)
+
+    def _client_changed(self) -> None:
+        client_id = self._client.currentData()
+        client = next((c for c in self._clients if c.id == client_id), None)
+        if client is not None:
+            self._client_address.setText(client.address or "")
+
+    def _add_client(self) -> None:
+        dlg = ClientDialog(self._context, parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            clients = self._context.client_repo.list_active()
+            selected_id = clients[-1].id if clients else None
+            self._load_clients(selected_id)
+
+    def _edit_client(self) -> None:
+        client_id = self._client.currentData()
+        client = next((c for c in self._clients if c.id == client_id), None)
+        if client is None:
+            QMessageBox.information(self, "Custom client", "Save this name as a client before editing it.")
+            return
+        dlg = ClientDialog(self._context, client=client, parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            self._load_clients(client.id)
+
+    def _add_service(self) -> None:
+        dlg = ServiceItemDialog(self._context, parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            items = self._context.service_repo.list_active()
+            self._load_services(items[-1].id if items else None)
+
+    def _edit_service(self) -> None:
+        service_id = self._service_combo.currentData()
+        item = self._context.service_repo.get(int(service_id)) if service_id else None
+        if item is None:
+            QMessageBox.information(self, "Select service", "Select a service to edit.")
+            return
+        dlg = ServiceItemDialog(self._context, item=item, parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            self._load_services(item.id)
 
     def _load_invoice(self) -> None:
         if self._invoice is None:
             return
         if self._invoice.client_id is not None:
-            for idx, client in enumerate(self._clients):
-                if client.id == self._invoice.client_id:
-                    self._client.setCurrentIndex(idx)
-                    break
+            index = self._client.findData(self._invoice.client_id)
+            self._client.setCurrentIndex(index if index >= 0 else 0)
+        else:
+            self._client.setEditText(self._invoice.client_name)
+        self._client_address.setText(self._invoice.client_address or "")
         issue_date = cast(date, self._invoice.issue_date)
         self._issue_date.setDate(QDate(issue_date.year, issue_date.month, issue_date.day))
         due = cast(date | None, self._invoice.due_date) or issue_date
@@ -207,6 +288,7 @@ class InvoiceEditorDialog(QDialog):
             self._issue_btn.setVisible(False)
             self._update_btn.setVisible(True)
             self._client.setEnabled(False)
+            self._client_address.setEnabled(False)
         self._actions_btn.setVisible(True)
         self._actions_btn.setMenu(self._build_actions_menu())
 
@@ -219,8 +301,10 @@ class InvoiceEditorDialog(QDialog):
         description: str = "Service",
         quantity: int = 1,
         unit_price_cents: int = 0,
-        taxable: bool = True,
+        taxable: bool | None = None,
     ) -> None:
+        if taxable is None:
+            taxable = self._context.setting_repo.get("default_taxable") == "1"
         row = self._table.rowCount()
         self._table.insertRow(row)
         self._table.setItem(row, 0, QTableWidgetItem(description))
@@ -320,15 +404,28 @@ class InvoiceEditorDialog(QDialog):
             return None
         if self._invoice is None:
             client_id = self._client.currentData()
-            if client_id is None:
-                QMessageBox.warning(self, "No client", "Please select a client.")
+            client_name = self._client.currentText().strip()
+            if not client_name:
+                QMessageBox.warning(self, "No client", "Enter or select a client name.")
                 return None
-            self._invoice = self._context.invoice_service.create_draft(
-                client_id=int(client_id),
-                invoice_date=cast(date, self._issue_date.date().toPython()),
-                due_date=cast(date, self._due_date.date().toPython()),
-                notes=self._notes.toPlainText().strip() or None,
-            )
+            invoice_date = cast(date, self._issue_date.date().toPython())
+            due_date = cast(date, self._due_date.date().toPython())
+            notes = self._notes.toPlainText().strip() or None
+            if client_id is None:
+                self._invoice = self._context.invoice_service.create_custom_draft(
+                    client_name=client_name,
+                    client_address=self._client_address.text().strip() or None,
+                    invoice_date=invoice_date,
+                    due_date=due_date,
+                    notes=notes,
+                )
+            else:
+                self._invoice = self._context.invoice_service.create_draft(
+                    client_id=int(client_id),
+                    invoice_date=invoice_date,
+                    due_date=due_date,
+                    notes=notes,
+                )
         self._context.invoice_service.update_invoice(
             self._invoice,
             cast(date, self._issue_date.date().toPython()),

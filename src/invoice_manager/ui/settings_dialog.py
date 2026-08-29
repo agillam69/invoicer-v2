@@ -152,6 +152,7 @@ class SettingsDialog(QDialog):
         "backup_keep": 30,
         "backup_on_exit": False,
         "backup_folder": "",
+        "default_taxable": False,
     }
 
     def __init__(self, context: AppContext, parent: QWidget | None = None) -> None:
@@ -181,6 +182,8 @@ class SettingsDialog(QDialog):
         self._payment_terms = QSpinBox()
         self._payment_terms.setRange(0, 365)
         biz_form.addRow("Payment terms (days):", self._payment_terms)
+        self._default_taxable = QCheckBox("New invoice lines are taxable")
+        biz_form.addRow("Default taxable:", self._default_taxable)
         self._fy_start = QSpinBox()
         self._fy_start.setRange(1, 12)
         self._fy_start.setToolTip("Month number the financial year starts (e.g. 7 for July)")
@@ -320,6 +323,7 @@ class SettingsDialog(QDialog):
         self._payment_terms.setValue(
             settings.get_int("payment_terms_days", self._default_for("payment_terms_days"))
         )
+        self._default_taxable.setChecked(settings.get("default_taxable") == "1")
         self._fy_start.setValue(
             settings.get_int("financial_year_start_month", self._default_for("financial_year_start_month"))
         )
@@ -376,6 +380,7 @@ class SettingsDialog(QDialog):
             return
         settings.set("gst_rate", gst)
         settings.set("payment_terms_days", str(self._payment_terms.value()))
+        settings.set("default_taxable", "1" if self._default_taxable.isChecked() else "0")
         settings.set("financial_year_start_month", str(self._fy_start.value()))
 
         self._context.invoice_service.set_next_invoice_number(self._next_invoice.value())
