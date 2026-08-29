@@ -3,15 +3,40 @@
 from __future__ import annotations
 
 import sys
+from typing import Any
 
 from invoice_manager.infrastructure.config import AppConfig
 from invoice_manager.infrastructure.logging_setup import get_logger, setup_logging
+
+
+def _install_exception_hook() -> None:
+    log = get_logger("invoice_manager.app")
+
+    def _handler(
+        exc_type: type[BaseException],
+        exc_value: BaseException | None,
+        exc_traceback: Any | None,
+    ) -> None:
+        if issubclass(exc_type, KeyboardInterrupt):
+            if exc_value is not None:
+                sys.__excepthook__(exc_type, exc_value, exc_traceback)
+            return
+        if exc_value is None:
+            log.error("Uncaught exception: %s", exc_type)
+            return
+        log.exception(
+            "Uncaught exception",
+            exc_info=(exc_type, exc_value, exc_traceback),
+        )
+
+    sys.excepthook = _handler
 
 
 def main() -> int:
     """Launch the Invoice & Receipt Manager."""
     config = AppConfig()
     setup_logging(config.logs_dir)
+    _install_exception_hook()
     log = get_logger("invoice_manager.app")
 
     lock = None
