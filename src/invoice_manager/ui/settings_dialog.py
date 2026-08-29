@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -61,6 +62,8 @@ class SettingsDialog(QDialog):
         "invoice_subtotal_label",
         "invoice_gst_label",
         "invoice_total_label",
+        "invoice_amount_paid_label",
+        "invoice_balance_due_label",
         "invoice_payment_details_label",
         "invoice_bank_label",
         "invoice_bsb_label",
@@ -68,6 +71,8 @@ class SettingsDialog(QDialog):
         "invoice_account_name_label",
         "invoice_notes_label",
         "invoice_thank_you",
+        "invoice_payment_terms_note",
+        "invoice_gst_footer_note",
     ]
 
     _INVOICE_DEFAULTS = {
@@ -86,6 +91,8 @@ class SettingsDialog(QDialog):
         "invoice_subtotal_label": "Subtotal",
         "invoice_gst_label": "GST",
         "invoice_total_label": "Total",
+        "invoice_amount_paid_label": "Amount Paid",
+        "invoice_balance_due_label": "Balance Due",
         "invoice_payment_details_label": "Payment details",
         "invoice_bank_label": "Bank:",
         "invoice_bsb_label": "BSB:",
@@ -93,6 +100,8 @@ class SettingsDialog(QDialog):
         "invoice_account_name_label": "Name:",
         "invoice_notes_label": "Notes:",
         "invoice_thank_you": "Thank you for your business!",
+        "invoice_payment_terms_note": "Payment due within {days} days",
+        "invoice_gst_footer_note": "GST Excluded - Supplier not registered for GST. This template is designed for Australian GST invoicing. For invoices of $1,000 or more (including GST), ensure the customer's identity is included. Do not use the words 'Tax Invoice' if you are not GST registered.",
     }
 
     _RECEIPT_WORDING = [
@@ -113,6 +122,36 @@ class SettingsDialog(QDialog):
         "receipt_method_label": "Method:",
         "receipt_reference_label": "Reference:",
         "receipt_thank_you": "Thank you for your payment.",
+    }
+
+    _DEFAULT_VALUES: dict[str, Any] = {
+        "business_name": "Alexander Gillam",
+        "business_address": "15 Dalkeith Drive, Point Cook",
+        "business_abn": "73 421 221 580",
+        "business_phone": "03 7057 3645",
+        "business_email": "alex@gmedical.net.au",
+        "currency_symbol": "$",
+        "bank_name": "ANZ",
+        "bank_bsb": "013202",
+        "bank_account": "307415227",
+        "bank_account_name": "AK Gillam",
+        "thank_you_note": "Thank you for your business!",
+        "gst_rate": "0.0",
+        "payment_terms_days": 7,
+        "financial_year_start_month": 7,
+        "next_invoice_number": 1,
+        "next_receipt_number": 1,
+        "next_credit_note_number": 1,
+        "report_header_colour": "#2C3E50",
+        "report_accent_colour": "#2980B9",
+        "report_stripe_colour": "#EBF5FB",
+        "report_footer": "",
+        "pdf_save_mode": "Auto",
+        "backup_enabled": False,
+        "backup_frequency": 24,
+        "backup_keep": 30,
+        "backup_on_exit": False,
+        "backup_folder": "",
     }
 
     def __init__(self, context: AppContext, parent: QWidget | None = None) -> None:
@@ -265,31 +304,60 @@ class SettingsDialog(QDialog):
     def _label(self, key: str) -> str:
         return " ".join(part.capitalize() for part in key.replace("_", " ").split())
 
+    def _default_for(self, key: str) -> Any:
+        defaults: dict[str, Any] = {
+            **self._DEFAULT_VALUES,
+            **self._INVOICE_DEFAULTS,
+            **self._RECEIPT_DEFAULTS,
+        }
+        return defaults.get(key)
+
     def _load(self) -> None:
         settings = self._context.setting_repo
         for key, edit in self._fields.items():
-            value = settings.get(key)
-            if not value:
-                value = self._INVOICE_DEFAULTS.get(key) or self._RECEIPT_DEFAULTS.get(key)
-            edit.setText(value or "")
-        self._gst_rate.setText(settings.get("gst_rate") or "0.0")
-        self._payment_terms.setValue(settings.get_int("payment_terms_days", 7))
-        self._fy_start.setValue(settings.get_int("financial_year_start_month", 7))
-        self._next_invoice.setValue(settings.get_int("next_invoice_number", 1))
-        self._next_receipt.setValue(settings.get_int("next_receipt_number", 1))
+            edit.setText(settings.get(key) or self._default_for(key) or "")
+        self._gst_rate.setText(settings.get("gst_rate") or self._default_for("gst_rate"))
+        self._payment_terms.setValue(
+            settings.get_int("payment_terms_days", self._default_for("payment_terms_days"))
+        )
+        self._fy_start.setValue(
+            settings.get_int("financial_year_start_month", self._default_for("financial_year_start_month"))
+        )
+        self._next_invoice.setValue(
+            settings.get_int("next_invoice_number", self._default_for("next_invoice_number"))
+        )
+        self._next_receipt.setValue(
+            settings.get_int("next_receipt_number", self._default_for("next_receipt_number"))
+        )
 
-        self._report_header_colour.setText(settings.get("report_header_colour") or "#2C3E50")
-        self._report_accent_colour.setText(settings.get("report_accent_colour") or "#2980B9")
-        self._report_stripe_colour.setText(settings.get("report_stripe_colour") or "#EBF5FB")
-        self._report_footer.setText(settings.get("report_footer") or "")
-        pdf_mode = settings.get("pdf_save_mode") or "Auto"
-        self._pdf_save_mode.setCurrentText(pdf_mode if pdf_mode in ("Auto", "Prompt") else "Auto")
+        self._report_header_colour.setText(
+            settings.get("report_header_colour") or self._default_for("report_header_colour")
+        )
+        self._report_accent_colour.setText(
+            settings.get("report_accent_colour") or self._default_for("report_accent_colour")
+        )
+        self._report_stripe_colour.setText(
+            settings.get("report_stripe_colour") or self._default_for("report_stripe_colour")
+        )
+        self._report_footer.setText(settings.get("report_footer") or self._default_for("report_footer"))
+        pdf_mode = settings.get("pdf_save_mode") or self._default_for("pdf_save_mode")
+        self._pdf_save_mode.setCurrentText(
+            pdf_mode if pdf_mode in ("Auto", "Prompt") else "Auto"
+        )
 
-        self._backup_enabled.setChecked(settings.get("backup_enabled") == "1")
-        self._backup_frequency.setValue(settings.get_int("backup_frequency_hours", 24))
-        self._backup_keep.setValue(settings.get_int("backup_keep", 30))
-        self._backup_on_exit.setChecked(settings.get("backup_on_exit") == "1")
-        self._backup_folder.setText(settings.get("backup_folder") or "")
+        self._backup_enabled.setChecked(
+            (settings.get("backup_enabled") or str(int(self._default_for("backup_enabled")))) == "1"
+        )
+        self._backup_frequency.setValue(
+            settings.get_int("backup_frequency_hours", self._default_for("backup_frequency"))
+        )
+        self._backup_keep.setValue(
+            settings.get_int("backup_keep", self._default_for("backup_keep"))
+        )
+        self._backup_on_exit.setChecked(
+            (settings.get("backup_on_exit") or str(int(self._default_for("backup_on_exit")))) == "1"
+        )
+        self._backup_folder.setText(settings.get("backup_folder") or self._default_for("backup_folder"))
 
         self._data_dir.setText(str(self._context.config.get_data_directory()))
         self._database_path.setText(str(self._context.config.db_path()))

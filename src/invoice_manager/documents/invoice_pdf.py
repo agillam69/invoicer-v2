@@ -54,6 +54,14 @@ class InvoicePDFBuilder:
 
         # Header
         story.append(Paragraph(self._get("business_name", "Invoice"), styles["Title"]))
+        abn = self._get("business_abn")
+        if abn:
+            story.append(Paragraph(f"ABN: {abn}", styles["Normal"]))
+        phone = self._get("business_phone")
+        email = self._get("business_email")
+        contact_bits = [b for b in [phone, email] if b]
+        if contact_bits:
+            story.append(Paragraph("  |  ".join(contact_bits), styles["Normal"]))
         story.append(Paragraph(self._get("business_address"), styles["Normal"]))
         story.append(Spacer(1, 6 * mm))
 
@@ -135,6 +143,37 @@ class InvoicePDFBuilder:
         story.append(table)
         story.append(Spacer(1, 8 * mm))
 
+        # Payment summary
+        paid_cents = sum(
+            p.amount_cents for p in self.invoice.payments if not p.is_reversed
+        )
+        credit_cents = sum(c.amount_cents for c in self.invoice.credits)
+        amount_paid = paid_cents + credit_cents
+        balance_due = self.invoice.total_cents - amount_paid
+        data.append(
+            ["", "", "", self._get("invoice_amount_paid_label", "Amount Paid"), "", self._fmt(amount_paid)]
+        )
+        data.append(
+            ["", "", "", self._get("invoice_balance_due_label", "Balance Due"), "", self._fmt(balance_due)]
+        )
+
+        table = Table(data, colWidths=[70 * mm, 15 * mm, 20 * mm, 25 * mm, 20 * mm, 25 * mm])
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2C3E50")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                    ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTNAME", (0, -5), (-1, -1), "Helvetica-Bold"),
+                ]
+            )
+        )
+        story.append(table)
+        story.append(Spacer(1, 8 * mm))
+
         # Payment details / notes
         bank_name = self._get("bank_name")
         bsb = self._get("bank_bsb")
@@ -157,6 +196,14 @@ class InvoicePDFBuilder:
                 )
             )
             story.append(Spacer(1, 4 * mm))
+
+        payment_terms_note = self._get("invoice_payment_terms_note", "")
+        if payment_terms_note:
+            story.append(
+                Paragraph(f"<b>Payment Terms:</b> {payment_terms_note}", styles["Normal"])
+            )
+            story.append(Spacer(1, 2 * mm))
+
         if self.invoice.notes:
             story.append(
                 Paragraph(
@@ -164,6 +211,12 @@ class InvoicePDFBuilder:
                     styles["Normal"],
                 )
             )
+
+        gst_footer = self._get("invoice_gst_footer_note", "")
+        if gst_footer:
+            story.append(Spacer(1, 4 * mm))
+            story.append(Paragraph(gst_footer, styles["Normal"]))
+
         thank_you = self._get("invoice_thank_you", "Thank you for your business!")
         if thank_you:
             story.append(Spacer(1, 8 * mm))

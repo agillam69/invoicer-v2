@@ -43,19 +43,39 @@ class ReceiptPDFBuilder:
         story: list[Any] = []
 
         story.append(Paragraph(self._get("business_name", "Receipt"), styles["Title"]))
+        abn = self._get("business_abn")
+        if abn:
+            story.append(Paragraph(f"ABN: {abn}", styles["Normal"]))
+        phone = self._get("business_phone")
+        email = self._get("business_email")
+        contact_bits = [b for b in [phone, email] if b]
+        if contact_bits:
+            story.append(Paragraph("  |  ".join(contact_bits), styles["Normal"]))
         story.append(Paragraph(self._get("business_address"), styles["Normal"]))
-        story.append(Spacer(1, 6 * mm))
+        story.append(Spacer(1, 8 * mm))
 
         title = self._get("receipt_title", "RECEIPT")
         story.append(Paragraph(f"<b>{title}</b> — {self.payment.receipt_number}", styles["Heading2"]))
+        story.append(Spacer(1, 4 * mm))
+
+        story.append(Paragraph("<b>RECEIPT OF PAYMENT</b>", styles["Heading3"]))
+        story.append(Spacer(1, 3 * mm))
+
+        invoice_amount = self.invoice.total_cents
+        amount_paid = self.payment.amount_cents
+        outstanding = max(0, invoice_amount - amount_paid)
+
         data = [
-            [self._get("receipt_invoice_label", "Invoice:"), self.invoice.number],
-            [self._get("receipt_date_label", "Date:"), str(self.payment.date)],
-            [self._get("receipt_amount_label", "Amount:"), str(Money(cents=self.payment.amount_cents))],
-            [self._get("receipt_method_label", "Method:"), self.payment.method or ""],
-            [self._get("receipt_reference_label", "Reference:"), self.payment.reference or ""],
+            ["Received from:", self.invoice.client_name],
+            [self._get("receipt_invoice_label", "Invoice #:") or "Invoice #:", self.invoice.number],
+            ["Invoice date:", str(self.invoice.issue_date)],
+            ["Invoice amount:", str(Money(cents=invoice_amount))],
+            [self._get("receipt_amount_label", "Amount paid:") or "Amount paid:", str(Money(cents=amount_paid))],
+            [self._get("receipt_method_label", "Payment method:") or "Payment method:", self.payment.method or ""],
+            [self._get("receipt_reference_label", "Payment reference:") or "Payment reference:", self.payment.reference or ""],
+            ["Amount outstanding:", str(Money(cents=outstanding))],
         ]
-        story.append(Table(data, colWidths=[35 * mm, 120 * mm]))
+        story.append(Table(data, colWidths=[45 * mm, 110 * mm]))
         story.append(Spacer(1, 8 * mm))
 
         thank_you = self._get("receipt_thank_you", "Thank you for your payment.")
