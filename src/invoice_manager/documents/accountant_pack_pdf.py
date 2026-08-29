@@ -32,25 +32,9 @@ from reportlab.platypus import (
 from sqlalchemy import select
 
 from invoice_manager.domain.money import format_money
+from invoice_manager.domain.tax_year import TaxYear
 from invoice_manager.persistence.models import Invoice, LedgerEntry
 from invoice_manager.ui.app_context import AppContext
-
-
-def _fy_dates(fy: str) -> tuple[date, date]:
-    """Return Australian financial-year start/end dates for strings like '2025-2026'."""
-    clean = fy.replace("/", "-")
-    parts = [p for p in clean.split("-") if p.isdigit()]
-    if len(parts) >= 2:
-        y1 = int(parts[0])
-        y2 = int(parts[1])
-    else:
-        now = date.today()
-        y = now.year
-        if now.month < 7:
-            y1, y2 = y - 1, y
-        else:
-            y1, y2 = y, y + 1
-    return date(y1, 7, 1), date(y2, 6, 30)
 
 
 def _fmt_cents(cents: int, symbol: str = "$") -> str:
@@ -387,8 +371,9 @@ def generate_accountant_pack_pdf(
     header_colour = _hex_color(hdr_hex, "#2C3E50")
     stripe_colour = _hex_color(str_hex, "#EBF5FB")
     gst_rate = Decimal(settings.get("gst_rate") or "0.0")
+    start_month = int(settings.get("financial_year_start_month") or 7)
 
-    start, end = _fy_dates(fy)
+    start, end = TaxYear(start_month).dates(fy)
     styles = _make_styles(header_colour)
 
     session = context.session

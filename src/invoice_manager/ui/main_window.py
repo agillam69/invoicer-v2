@@ -26,6 +26,7 @@ from invoice_manager.application.backup_service import BackupService, BackupServ
 from invoice_manager.application.export_service import DataExportService, DataExportServiceError
 from invoice_manager.documents.accountant_pack_pdf import generate_accountant_pack_pdf
 from invoice_manager.documents.blank_invoice_docx import generate_blank_invoice_docx
+from invoice_manager.domain.tax_year import TaxYear
 from invoice_manager.infrastructure.config import AppConfig
 from invoice_manager.infrastructure.logging_setup import get_logger
 from invoice_manager.ui.app_context import AppContext
@@ -243,8 +244,8 @@ class MainWindow(QMainWindow):
         self._with_selected_invoice("issue receipt", "issue_receipt_selected")
 
     def _generate_accountant_pack(self) -> None:
-        now = datetime.now().year
-        current_fy = f"{now}-{now + 1}" if datetime.now().month >= 7 else f"{now - 1}-{now}"
+        start_month = self._context.setting_repo.get_int("financial_year_start_month", 7)
+        current_fy = TaxYear(start_month).current()
         fy, ok = QInputDialog.getText(
             self,
             "Accountant Pack",
@@ -272,6 +273,7 @@ class MainWindow(QMainWindow):
                     "report_header_colour",
                     "report_stripe_colour",
                     "gst_rate",
+                    "financial_year_start_month",
                 ]
             }
             generate_accountant_pack_pdf(Path(path), fy.strip(), self._context, settings)

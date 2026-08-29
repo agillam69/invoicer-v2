@@ -122,6 +122,10 @@ class SettingsDialog(QDialog):
         self._payment_terms = QSpinBox()
         self._payment_terms.setRange(0, 365)
         biz_form.addRow("Payment terms (days):", self._payment_terms)
+        self._fy_start = QSpinBox()
+        self._fy_start.setRange(1, 12)
+        self._fy_start.setToolTip("Month number the financial year starts (e.g. 7 for July)")
+        biz_form.addRow("Financial year start month:", self._fy_start)
         self._next_invoice = QSpinBox()
         self._next_invoice.setRange(1, 999999)
         biz_form.addRow("Next invoice number:", self._next_invoice)
@@ -237,6 +241,7 @@ class SettingsDialog(QDialog):
             edit.setText(settings.get(key) or "")
         self._gst_rate.setText(settings.get("gst_rate") or "0.0")
         self._payment_terms.setValue(settings.get_int("payment_terms_days", 7))
+        self._fy_start.setValue(settings.get_int("financial_year_start_month", 7))
         self._next_invoice.setValue(settings.get_int("next_invoice_number", 1))
         self._next_receipt.setValue(settings.get_int("next_receipt_number", 1))
 
@@ -270,6 +275,7 @@ class SettingsDialog(QDialog):
             return
         settings.set("gst_rate", gst)
         settings.set("payment_terms_days", str(self._payment_terms.value()))
+        settings.set("financial_year_start_month", str(self._fy_start.value()))
 
         self._context.invoice_service.set_next_invoice_number(self._next_invoice.value())
         self._context.payment_service.set_next_receipt_number(self._next_receipt.value())
