@@ -302,7 +302,7 @@ class MainWindow(QMainWindow):
         if not path:
             return
         try:
-            service = DataExportService(self._context.config)
+            service = DataExportService(self._context.config, self._context.session)
             archive = service.export_all(Path(path))
             QMessageBox.information(self, "Export complete", f"Saved: {archive}")
         except DataExportServiceError as exc:
@@ -366,6 +366,8 @@ class MainWindow(QMainWindow):
         self._backup_timer.start(15 * 60 * 1000)
 
     def _backup_if_due(self) -> None:
+        if self._context.config.database_mode() != "sqlite":
+            return
         try:
             service = BackupService(
                 self._context.config.get_data_directory(),
@@ -378,6 +380,8 @@ class MainWindow(QMainWindow):
             _log.exception("Scheduled backup failed")
 
     def _backup_on_exit(self) -> None:
+        if self._context.config.database_mode() != "sqlite":
+            return
         try:
             service = BackupService(
                 self._context.config.get_data_directory(),
@@ -390,6 +394,13 @@ class MainWindow(QMainWindow):
             _log.exception("Exit backup failed")
 
     def _backup_now(self) -> None:
+        if self._context.config.database_mode() != "sqlite":
+            QMessageBox.information(
+                self,
+                "Remote database",
+                "File backup is unavailable for MySQL. Use Export all data for an application-level backup and configure server backups with your database provider.",
+            )
+            return
         try:
             service = BackupService(
                 self._context.config.get_data_directory(),
@@ -403,6 +414,13 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Backup failed", str(exc))
 
     def _restore_backup(self) -> None:
+        if self._context.config.database_mode() != "sqlite":
+            QMessageBox.information(
+                self,
+                "Remote database",
+                "Raw restore is unavailable for MySQL. Restore the server database through your database provider.",
+            )
+            return
         path, _ = QFileDialog.getOpenFileName(
             self,
             "Select backup zip",

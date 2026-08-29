@@ -25,7 +25,9 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from sqlalchemy import URL
 
+from invoice_manager.persistence.database import Database
 from invoice_manager.ui.app_context import AppContext
 
 
@@ -262,6 +264,28 @@ class SettingsDialog(QDialog):
         db_row.addWidget(open_db_btn)
         data_form.addRow("Database file:", db_row)
 
+        self._database_mode = QComboBox()
+        self._database_mode.addItem("Local SQLite", "sqlite")
+        self._database_mode.addItem("Remote MySQL / MariaDB", "mysql")
+        self._database_mode.currentIndexChanged.connect(self._update_database_fields)
+        data_form.addRow("Database type:", self._database_mode)
+
+        self._mysql_host = QLineEdit()
+        data_form.addRow("MySQL host:", self._mysql_host)
+        self._mysql_port = QSpinBox()
+        self._mysql_port.setRange(1, 65535)
+        data_form.addRow("MySQL port:", self._mysql_port)
+        self._mysql_database = QLineEdit()
+        data_form.addRow("MySQL database:", self._mysql_database)
+        self._mysql_user = QLineEdit()
+        data_form.addRow("MySQL user:", self._mysql_user)
+        self._mysql_password_env = QLineEdit()
+        self._mysql_password_env.setPlaceholderText("INVOICE_MANAGER_DB_PASSWORD")
+        data_form.addRow("Password environment variable:", self._mysql_password_env)
+        self._test_database_btn = QPushButton("Test database connection")
+        self._test_database_btn.clicked.connect(self._test_database_connection)
+        data_form.addRow(self._test_database_btn)
+
         self._migration_source = QLineEdit()
         self._migration_source.setReadOnly(True)
         open_source_btn = QPushButton("Open source folder")
@@ -271,7 +295,7 @@ class SettingsDialog(QDialog):
         source_row.addWidget(open_source_btn)
         data_form.addRow("Migration / CSV source:", source_row)
 
-        data_form.addRow(QLabel("Changing data folders requires a restart to take effect."))
+        data_form.addRow(QLabel("Changing the data folder or database requires a restart to take effect."))
         data_group.setLayout(data_form)
         tabs.addTab(data_group, "Data")
 
@@ -365,6 +389,17 @@ class SettingsDialog(QDialog):
 
         self._data_dir.setText(str(self._context.config.get_data_directory()))
         self._database_path.setText(str(self._context.config.db_path()))
+        database_cfg = self._context.config.load()
+        mode_index = self._database_mode.findData(self._context.config.database_mode())
+        self._database_mode.setCurrentIndex(max(0, mode_index))
+        self._mysql_host.setText(str(database_cfg.get("mysql_host", "localhost")))
+        self._mysql_port.setValue(int(database_cfg.get("mysql_port", 3306)))
+        self._mysql_database.setText(str(database_cfg.get("mysql_database", "invoice_manager")))
+        self._mysql_user.setText(str(database_cfg.get("mysql_user", "")))
+        self._mysql_password_env.setText(
+            str(database_cfg.get("mysql_password_env", "INVOICE_MANAGER_DB_PASSWORD"))
+        )
+        self._update_database_fields()
         self._migration_source.setText(settings.get("migration_source_dir") or "")
 
     def _save(self) -> None:
@@ -405,10 +440,60 @@ class SettingsDialog(QDialog):
         new_data_dir = Path(self._data_dir.text())
         if new_data_dir != self._context.config.get_data_directory():
             self._context.config.set_data_directory(new_data_dir)
+        self._context.config.configure_database(
+            {
+                "database_mode": self._database_mode.currentData(),
+                "mysql_host": self._mysql_host.text().strip(),
+                "mysql_port": self._mysql_port.value(),
+                "mysql_database": self._mysql_database.text().strip(),
+                "mysql_user": self._mysql_user.text().strip(),
+                "mysql_password_env": self._mysql_password_env.text().strip(),
+            }
+        )
 
         self._context.session.commit()
         QMessageBox.information(self, "Saved", "Settings saved.")
         self.accept()
+
+    def _update_database_fields(self) -> None:
+        enabled = self._database_mode.currentData() == "mysql"
+        for widget in (
+            self._mysql_host,
+            self._mysql_port,
+            self._mysql_database,
+            self._mysql_user,
+            self._mysql_password_env,
+        ):
+            widget.setEnabled(enabled)
+        self._test_database_btn.setEnabled(enabled)
+
+    def _test_database_connection(self) -> None:
+        password_env = self._mysql_password_env.text().strip()
+        password = os.environ.get(password_env)
+        if not password:
+            QMessageBox.warning(
+                self,
+                "Password unavailable",
+                f"Set the {password_env} environment variable before testing.",
+            )
+            return
+        url = URL.create(
+            "mysql+pymysql",
+            username=self._mysql_user.text().strip(),
+            password=password,
+            host=self._mysql_host.text().strip(),
+            port=self._mysql_port.value(),
+            database=self._mysql_database.text().strip(),
+            query={"charset": "utf8mb4"},
+        )
+        database = Database(url)
+        try:
+            database.test_connection()
+            QMessageBox.information(self, "Connection successful", "The MySQL connection succeeded.")
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Connection failed", str(exc))
+        finally:
+            database.engine.dispose()
 
     def _browse_data_dir(self) -> None:
         path = QFileDialog.getExistingDirectory(

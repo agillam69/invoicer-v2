@@ -34,7 +34,7 @@ class AppContext(QObject):
         super().__init__()
         self.config = config
         self.current_user = current_user
-        self.database = Database(config.db_path())
+        self.database = Database(config.database_url())
         self.database.create_schema()
         self.session = self.database.new_session()
         event.listen(self.session, "after_commit", lambda _session: self.data_changed.emit())

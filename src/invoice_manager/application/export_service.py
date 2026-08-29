@@ -6,10 +6,15 @@ SQLite database, documents, exports, and logs.
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import zipfile
 from datetime import datetime
 from pathlib import Path
+
+from sqlalchemy import MetaData, select
+from sqlalchemy.orm import Session
 
 from invoice_manager.infrastructure.config import AppConfig
 
@@ -23,8 +28,9 @@ class DataExportService:
 
     MANIFEST_NAME = "export_manifest.json"
 
-    def __init__(self, config: AppConfig) -> None:
+    def __init__(self, config: AppConfig, session: Session | None = None) -> None:
         self._config = config
+        self._session = session
 
     def export_all(self, target: Path | None = None) -> Path:
         """Zip the base application directory and return the archive path.
@@ -50,6 +56,18 @@ class DataExportService:
                 "base_dir": str(base),
             }
             zf.writestr(self.MANIFEST_NAME, json.dumps(manifest, indent=2))
+
+            if self._session is not None:
+                metadata = MetaData()
+                metadata.reflect(bind=self._session.get_bind())
+                for table in sorted(metadata.tables.values(), key=lambda value: value.name):
+                    rows = self._session.execute(select(table)).mappings().all()
+                    output = io.StringIO(newline="")
+                    writer = csv.DictWriter(output, fieldnames=[column.name for column in table.columns])
+                    writer.writeheader()
+                    for row in rows:
+                        writer.writerow({key: str(value) if value is not None else "" for key, value in row.items()})
+                    zf.writestr(f"database_csv/{table.name}.csv", output.getvalue())
 
             if self._config.config_path.exists():
                 zf.write(self._config.config_path, self._config.config_path.name)

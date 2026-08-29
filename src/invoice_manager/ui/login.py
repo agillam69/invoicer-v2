@@ -21,7 +21,7 @@ from invoice_manager.persistence.repositories import UserRepository
 
 def run_login_flow(config: AppConfig) -> str | None:
     """Show login, create the admin user on first run, and return the username."""
-    db = Database(config.db_path())
+    db = Database(config.database_url())
     db.create_schema()
 
     session = db.new_session()

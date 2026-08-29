@@ -68,6 +68,16 @@ def main() -> int:
         return app.exec()
     except Exception as exc:  # noqa: BLE001
         log.exception("Fatal error during startup: %s", exc)
+        try:
+            from PySide6.QtWidgets import QMessageBox
+
+            QMessageBox.critical(
+                None,
+                "Application startup failed",
+                f"The database could not be opened. Check the database configuration and password environment variable.\n\n{exc}",
+            )
+        except Exception:  # noqa: BLE001
+            pass
         return 1
     finally:
         if lock is not None:

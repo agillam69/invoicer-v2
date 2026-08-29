@@ -7,6 +7,8 @@ from pathlib import Path
 
 from invoice_manager.application.export_service import DataExportService
 from invoice_manager.infrastructure.config import AppConfig
+from invoice_manager.persistence.database import Database
+from invoice_manager.persistence.repositories import ClientRepository
 
 
 def test_export_all_creates_zip_with_manifest(tmp_path: Path) -> None:
@@ -26,6 +28,23 @@ def test_export_all_creates_zip_with_manifest(tmp_path: Path) -> None:
         assert any("data/" in n for n in names)
         assert any("documents/" in n for n in names)
         assert any("logs/" in n for n in names)
+
+
+def test_export_all_includes_database_csv_when_session_is_supplied(tmp_path: Path) -> None:
+    config = AppConfig(tmp_path)
+    database = Database(config.db_path())
+    database.create_schema()
+    session = database.new_session()
+    try:
+        ClientRepository(session).create(name="Acme")
+        session.commit()
+        archive = DataExportService(config, session).export_all()
+        with zipfile.ZipFile(archive, "r") as zf:
+            assert "database_csv/clients.csv" in zf.namelist()
+            assert "Acme" in zf.read("database_csv/clients.csv").decode("utf-8")
+    finally:
+        session.close()
+        database.engine.dispose()
 
 
 def test_export_all_allows_custom_target(tmp_path: Path) -> None:

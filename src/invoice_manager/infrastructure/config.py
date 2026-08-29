@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import URL
+
 
 class AppConfig:
     """Manages the storage layout and runtime configuration file."""
@@ -46,6 +48,41 @@ class AppConfig:
 
     def db_path(self) -> Path:
         return self.data_dir / "business.sqlite3"
+
+    def database_mode(self) -> str:
+        mode = str(self.load().get("database_mode", "sqlite")).lower()
+        return mode if mode in {"sqlite", "mysql"} else "sqlite"
+
+    def database_url(self) -> str | URL:
+        if self.database_mode() == "sqlite":
+            return f"sqlite:///{self.db_path()}"
+        cfg = self.load()
+        password_env = str(cfg.get("mysql_password_env", "INVOICE_MANAGER_DB_PASSWORD"))
+        password = os.environ.get(password_env)
+        if password is None:
+            raise RuntimeError(f"Database password environment variable is not set: {password_env}")
+        return URL.create(
+            "mysql+pymysql",
+            username=str(cfg.get("mysql_user", "")),
+            password=password,
+            host=str(cfg.get("mysql_host", "localhost")),
+            port=int(cfg.get("mysql_port", 3306)),
+            database=str(cfg.get("mysql_database", "invoice_manager")),
+            query={"charset": "utf8mb4"},
+        )
+
+    def configure_database(self, values: dict[str, Any]) -> None:
+        cfg = self.load()
+        allowed = {
+            "database_mode",
+            "mysql_host",
+            "mysql_port",
+            "mysql_database",
+            "mysql_user",
+            "mysql_password_env",
+        }
+        cfg.update({key: value for key, value in values.items() if key in allowed})
+        self.save(cfg)
 
     def load(self) -> dict[str, Any]:
         if not self.config_path.exists():

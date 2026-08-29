@@ -89,7 +89,7 @@ class MigrationWizard(QDialog):
             QMessageBox.warning(self, "Folder not found", f"{source} does not exist.")
             return
         try:
-            db = Database(self._config.db_path())
+            db = Database(self._config.database_url())
             db.create_schema()
             session = db.new_session()
             file_store = FileStore(self._config.get_data_directory())
