@@ -39,6 +39,7 @@ def setup_logging(log_dir: Path, app_name: str = "invoice_manager") -> Path:
     log_dir = Path(log_dir)
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / "application.log"
+    error_log_path = log_dir / "error.log"
 
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.DEBUG)
@@ -48,6 +49,7 @@ def setup_logging(log_dir: Path, app_name: str = "invoice_manager") -> Path:
         root_logger.removeHandler(handler)
 
     _add_file_handler(root_logger, log_path, logging.DEBUG)
+    _add_file_handler(root_logger, error_log_path, logging.ERROR)
 
     exe_log_path = get_exe_log_path()
     if exe_log_path is not None:
@@ -62,7 +64,9 @@ def setup_logging(log_dir: Path, app_name: str = "invoice_manager") -> Path:
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
 
-    logging.getLogger(app_name).info("Logging initialised: %s", log_path)
+    logging.getLogger(app_name).info(
+        "Logging initialised: application=%s errors=%s", log_path, error_log_path
+    )
     if exe_log_path is not None:
         logging.getLogger(app_name).info("Executable log: %s", exe_log_path)
     return log_path

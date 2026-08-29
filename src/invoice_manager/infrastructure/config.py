@@ -15,6 +15,12 @@ class AppConfig:
 
     APP_DIR_NAME = "InvoiceReceiptManager"
     CONFIG_FILE = "config.json"
+    REMOTE_DATABASE_ENABLED = False
+    DEFAULT_CONFIG: dict[str, Any] = {
+        "config_version": 1,
+        "database_mode": "sqlite",
+        "data_dir": "",
+    }
 
     def __init__(self, base_dir: Path | None = None) -> None:
         if base_dir is None:
@@ -27,6 +33,7 @@ class AppConfig:
         self.backups_dir: Path = self.base_dir / "backups"
         self.logs_dir: Path = self.base_dir / "logs"
         self._ensure_dirs()
+        self._ensure_config()
 
     @classmethod
     def _default_base_dir(cls) -> Path:
@@ -46,10 +53,16 @@ class AppConfig:
         ):
             directory.mkdir(parents=True, exist_ok=True)
 
+    def _ensure_config(self) -> None:
+        if not self.config_path.exists():
+            self.save(dict(self.DEFAULT_CONFIG))
+
     def db_path(self) -> Path:
         return self.data_dir / "business.sqlite3"
 
     def database_mode(self) -> str:
+        if not self.REMOTE_DATABASE_ENABLED:
+            return "sqlite"
         mode = str(self.load().get("database_mode", "sqlite")).lower()
         return mode if mode in {"sqlite", "mysql"} else "sqlite"
 
@@ -82,6 +95,8 @@ class AppConfig:
             "mysql_password_env",
         }
         cfg.update({key: value for key, value in values.items() if key in allowed})
+        if not self.REMOTE_DATABASE_ENABLED:
+            cfg["database_mode"] = "sqlite"
         self.save(cfg)
 
     def load(self) -> dict[str, Any]:
@@ -98,8 +113,13 @@ class AppConfig:
 
     def save(self, values: dict[str, Any]) -> None:
         self.base_dir.mkdir(parents=True, exist_ok=True)
-        with self.config_path.open("w", encoding="utf-8") as f:
-            json.dump(values, f, indent=4)
+        safe_values = {**self.DEFAULT_CONFIG, **values}
+        temporary_path = self.config_path.with_suffix(".json.tmp")
+        with temporary_path.open("w", encoding="utf-8") as f:
+            json.dump(safe_values, f, indent=4)
+            f.flush()
+            os.fsync(f.fileno())
+        temporary_path.replace(self.config_path)
 
     def get_data_directory(self) -> Path:
         cfg = self.load()

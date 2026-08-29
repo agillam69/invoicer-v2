@@ -10,11 +10,21 @@ from invoice_manager.infrastructure.config import AppConfig
 
 def test_database_url_defaults_to_local_sqlite(tmp_path):
     config = AppConfig(tmp_path)
+    assert config.config_path.exists()
+    assert config.load()["database_mode"] == "sqlite"
     assert config.database_mode() == "sqlite"
     assert str(config.database_url()).startswith("sqlite:///")
 
 
+def test_staged_mysql_config_cannot_activate(tmp_path):
+    config = AppConfig(tmp_path)
+    config.configure_database({"database_mode": "mysql", "mysql_host": "example.test"})
+    assert config.database_mode() == "sqlite"
+    assert config.load()["database_mode"] == "sqlite"
+
+
 def test_mysql_database_url_uses_environment_password(tmp_path, monkeypatch):
+    monkeypatch.setattr(AppConfig, "REMOTE_DATABASE_ENABLED", True)
     config = AppConfig(tmp_path)
     config.configure_database(
         {
@@ -39,7 +49,8 @@ def test_mysql_database_url_uses_environment_password(tmp_path, monkeypatch):
     assert "secret:/value" not in config.config_path.read_text(encoding="utf-8")
 
 
-def test_mysql_database_url_requires_password_environment_variable(tmp_path):
+def test_mysql_database_url_requires_password_environment_variable(tmp_path, monkeypatch):
+    monkeypatch.setattr(AppConfig, "REMOTE_DATABASE_ENABLED", True)
     config = AppConfig(tmp_path)
     config.configure_database(
         {

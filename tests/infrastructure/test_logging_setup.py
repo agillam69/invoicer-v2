@@ -13,8 +13,12 @@ def test_setup_logging_creates_file(tmp_path):
     assert log_path.exists()
     logger = logging.getLogger("invoice_manager")
     logger.info("test message")
+    logger.error("test error")
     content = log_path.read_text(encoding="utf-8")
     assert "test message" in content
+    error_content = (tmp_path / "error.log").read_text(encoding="utf-8")
+    assert "test error" in error_content
+    assert "test message" not in error_content
 
 
 def test_get_exe_log_path_not_frozen():

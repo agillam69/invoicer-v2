@@ -91,7 +91,8 @@ location to take effect.
 | `...\documents\` | Generated invoice, receipt, and statement PDFs |
 | `...\exports\` | Exported CSV and report PDF files |
 | `...\backups\` | Timestamped backup ZIPs |
-| `...\logs\application.log` | Rotating application log |
+| `...\logs\application.log` | Rotating diagnostic log (DEBUG and above) |
+| `...\logs\error.log` | Rotating error-only log (ERROR and above) |
 
 If a custom data directory is set, `config.json` remains in the base
 directory but `business.sqlite3` and the `documents`, `exports`, `backups`,
@@ -416,9 +417,11 @@ PDF save behaviour is controlled by `pdf_save_mode`:
 (invoice issue, payment, reversal, delete, backup, restore, report export)
 are logged.
 
-`setup_logging()` configures a `RotatingFileHandler` for
-`logs/application.log` (5 MB × 10 backups) plus console output. The
-Reports > Application Log tab reads this file.
+`setup_logging()` configures rotating files for `logs/application.log`
+(DEBUG and above) and `logs/error.log` (ERROR and above), each limited to
+5 MB with 10 backups, plus console output. Frozen builds also write a log
+beside the executable when that folder is writable. The Reports >
+Application Log tab reads `application.log`.
 
 ---
 
@@ -569,7 +572,34 @@ ISCC installer\InvoiceReceiptManager.iss
 
 ---
 
-## 11. Troubleshooting
+## 11. Remote database rollout plan
+
+The supported production database remains the local SQLite file at
+`data\business.sqlite3`. Remote MySQL/MariaDB support is staged in the data
+access layer but is intentionally disabled in this release. The application
+always selects SQLite, and Settings displays remote database support as a
+planned feature.
+
+Before enabling MySQL in a future release:
+
+1. Add and package a pinned PyMySQL dependency.
+2. Run the complete integration suite against supported MySQL and MariaDB
+   versions, including concurrent invoice numbering and transaction rollback.
+3. Add TLS/CA configuration and require encrypted connections for hosted
+   databases.
+4. Add a pre-login recovery/configuration screen so an invalid remote
+   connection cannot prevent access to Settings.
+5. Provide a guided SQLite-to-MySQL data migration with record-count and
+   financial-total verification.
+6. Confirm server backup/restore procedures and test CSV application exports.
+7. Enable `AppConfig.REMOTE_DATABASE_ENABLED` only after those checks pass.
+
+Remote passwords must never be written to `config.json`; the staged design
+reads them from a named environment variable.
+
+---
+
+## 12. Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
@@ -582,7 +612,7 @@ ISCC installer\InvoiceReceiptManager.iss
 
 ---
 
-## 12. Glossary
+## 13. Glossary
 
 - **Soft delete** — records are flagged `is_deleted = True` instead of
   being physically removed, preserving history and referential integrity.
