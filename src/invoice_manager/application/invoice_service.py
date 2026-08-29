@@ -142,6 +142,7 @@ class InvoiceService:
         unit_price_cents: int,
         taxable: bool = True,
         discount_cents: int = 0,
+        unit: str = "ea",
     ) -> InvoiceItem:
         if not invoice.is_draft:
             raise InvoiceServiceError("Cannot edit an issued invoice")
@@ -156,7 +157,7 @@ class InvoiceService:
             invoice_id=invoice.id,
             description=description.strip(),
             quantity=quantity,
-            unit="ea",
+            unit=unit.strip() or "ea",
             unit_price_cents=unit_price_cents,
             discount_cents=discount_cents,
             taxable=taxable,
@@ -190,6 +191,8 @@ class InvoiceService:
             raise InvoiceServiceError("Cannot edit a void invoice")
         if invoice.is_cancelled:
             raise InvoiceServiceError("Cannot edit a cancelled invoice")
+        if invoice.status == "duplicate":
+            raise InvoiceServiceError("Cannot edit a duplicate invoice")
         if not lines or all(line.get("unit_price_cents", 0) == 0 for line in lines):
             raise InvoiceServiceError("Invoice must have at least one priced line item")
         invoice.issue_date = issue_date  # type: ignore[assignment]
@@ -208,7 +211,7 @@ class InvoiceService:
                 invoice_id=invoice.id,
                 description=line["description"].strip(),
                 quantity=line["quantity"],
-                unit="ea",
+                unit=str(line.get("unit", "ea")).strip() or "ea",
                 unit_price_cents=line["unit_price_cents"],
                 discount_cents=line["discount_cents"],
                 taxable=line["taxable"],
@@ -290,6 +293,15 @@ class InvoiceService:
         self._audit.record("invoice_voided", "invoices", invoice.id, {"reason": reason})
         return invoice
 
+    def mark_duplicate(self, invoice: Invoice, reason: str) -> Invoice:
+        if invoice.is_draft or invoice.is_void or invoice.is_cancelled:
+            raise InvoiceServiceError("Only issued invoices can be marked duplicate")
+        if invoice.payments or invoice.credits:
+            raise InvoiceServiceError("An invoice with payments or credits cannot be marked duplicate")
+        invoice.status = "duplicate"
+        self._audit.record("invoice_marked_duplicate", "invoices", invoice.id, {"reason": reason})
+        return invoice
+
     def add_credit_note(
         self,
         invoice: Invoice,
@@ -343,6 +355,7 @@ class InvoiceService:
                 item.unit_price_cents,
                 item.taxable,
                 item.discount_cents,
+                item.unit or "ea",
             )
         self._audit.record(
             "invoice_cloned", "invoices", draft.id, {"source": invoice.number}
@@ -424,6 +437,7 @@ class InvoiceService:
         paid: bool = False,
         paid_date: date | None = None,
         payment_note: str | None = None,
+        lines: list[dict[str, Any]] | None = None,
     ) -> Invoice:
         """Record a historical invoice that was created outside the system."""
         number = number.strip()
@@ -462,6 +476,37 @@ class InvoiceService:
             is_void=False,
             is_cancelled=False,
         )
+        if lines:
+            for sort_order, line in enumerate(lines):
+                description = str(line.get("description", "")).strip()
+                quantity = int(line.get("quantity", 1))
+                unit_price_cents = int(line.get("unit_price_cents", 0))
+                discount_cents = int(line.get("discount_cents", 0))
+                taxable = bool(line.get("taxable", True))
+                if not description or quantity <= 0 or unit_price_cents < 0 or discount_cents < 0:
+                    raise InvoiceServiceError("Manual invoice lines contain invalid values")
+                subtotal, gst, total = calculate_line_total(
+                    quantity, unit_price_cents, discount_cents, taxable, self._gst_rate
+                )
+                invoice.items.append(
+                    InvoiceItem(
+                        invoice_id=invoice.id,
+                        description=description,
+                        quantity=quantity,
+                        unit=str(line.get("unit", "ea")).strip() or "ea",
+                        unit_price_cents=unit_price_cents,
+                        discount_cents=discount_cents,
+                        taxable=taxable,
+                        subtotal_cents=subtotal,
+                        gst_cents=gst,
+                        total_cents=total,
+                        sort_order=sort_order,
+                    )
+                )
+            self._recalc(invoice)
+            subtotal_cents = invoice.subtotal_cents
+            gst_cents = invoice.gst_cents
+            total_cents = invoice.total_cents
 
         if paid and total_cents > 0:
             payment = self._payment_repo.create(
@@ -481,7 +526,7 @@ class InvoiceService:
             "manual_invoice_recorded",
             "invoices",
             invoice.id,
-            {"number": number, "client": client_name},
+            {"number": number, "client": client_name, "line_count": len(lines or [])},
         )
         return invoice
 

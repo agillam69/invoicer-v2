@@ -1,7 +1,17 @@
 from decimal import Decimal
 
-from invoice_manager.domain.invoices import calculate_invoice_totals, calculate_line_total
+from invoice_manager.domain.invoices import (
+    calculate_discount_cents,
+    calculate_invoice_totals,
+    calculate_line_total,
+)
 from invoice_manager.domain.money import Money
+
+
+def test_discount_accepts_currency_or_percentage():
+    assert calculate_discount_cents("25.50", 2, 10000) == 2550
+    assert calculate_discount_cents("10%", 2, 10000) == 2000
+    assert calculate_discount_cents("12.5 %", 1, 10000) == 1250
 
 
 def test_line_total_no_tax():

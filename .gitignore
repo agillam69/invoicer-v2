@@ -25,6 +25,7 @@ Desktop.ini
 
 # Build and packaging
 build/
+build-*/
 dist/
 *.spec
 *.exe

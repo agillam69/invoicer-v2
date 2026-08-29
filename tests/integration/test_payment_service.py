@@ -62,6 +62,27 @@ def _issue_invoice(invoice_service, client_id, amount_cents=11000):
     return inv
 
 
+def test_record_manual_receipt_uses_numbering_and_ledger(payment_deps):
+    payment_service, _invoice_service, client, session = payment_deps
+    receipt = payment_service.record_manual_receipt(
+        client_name=client.name,
+        client_id=client.id,
+        client_address="1 Main Street",
+        amount_cents=12500,
+        receipt_date=date.today(),
+        method="EFT",
+        reference="MANUAL-1",
+        description="Consulting deposit",
+    )
+    session.flush()
+    assert receipt.number == "RCT-0001"
+    assert receipt.client_name == "Acme Corp"
+    assert payment_service.list_manual_receipts() == [receipt]
+    entries = payment_service._ledger_service.list_entries()
+    assert entries[0].category == "Other Receipt"
+    assert entries[0].amount_cents == 12500
+
+
 def test_record_payment_marks_invoice_paid(payment_deps):
     payment_service, invoice_service, client, session = payment_deps
     inv = _issue_invoice(invoice_service, client.id)

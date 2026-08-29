@@ -1,6 +1,6 @@
 ; Inno Setup script for Invoice & Receipt Manager v2
 #define MyAppName "Invoice & Receipt Manager"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "2.0.6"
 #define MyAppPublisher "Gillams Software"
 #define MyAppExeName "InvoiceReceiptManager.exe"
 

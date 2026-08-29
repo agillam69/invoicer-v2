@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from enum import StrEnum
+from typing import Any
 
 
 class InvoiceStatus(StrEnum):
@@ -13,8 +14,17 @@ class InvoiceStatus(StrEnum):
     PAID = "paid"
     OVERDUE = "overdue"
     CREDITED = "credited"
+    DUPLICATE = "duplicate"
     CANCELLED = "cancelled"
     VOID = "void"
+
+
+def invoice_balance_cents(invoice: Any) -> int:
+    if invoice.status in {InvoiceStatus.PAID.value, InvoiceStatus.DUPLICATE.value}:
+        return 0
+    paid = sum(int(payment.amount_cents) for payment in invoice.payments if not payment.is_reversed)
+    credits = sum(int(credit.amount_cents) for credit in invoice.credits)
+    return max(0, int(invoice.total_cents) - paid - credits)
 
 
 def derive_invoice_status(

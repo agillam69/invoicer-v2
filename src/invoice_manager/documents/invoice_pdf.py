@@ -19,6 +19,7 @@ from reportlab.platypus import (
 )
 
 from invoice_manager.domain.money import Money
+from invoice_manager.domain.statuses import invoice_balance_cents
 from invoice_manager.persistence.models import Invoice
 
 
@@ -126,30 +127,13 @@ class InvoicePDFBuilder:
             ["", "", "", self._get("invoice_total_label", "Total"), "", self._fmt(self.invoice.total_cents)]
         )
 
-        table = Table(data, colWidths=[70 * mm, 15 * mm, 20 * mm, 25 * mm, 20 * mm, 25 * mm])
-        table.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2C3E50")),
-                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-                    ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                    ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                    ("FONTNAME", (0, -3), (-1, -1), "Helvetica-Bold"),
-                ]
-            )
-        )
-        story.append(table)
-        story.append(Spacer(1, 8 * mm))
-
         # Payment summary
         paid_cents = sum(
             p.amount_cents for p in self.invoice.payments if not p.is_reversed
         )
         credit_cents = sum(c.amount_cents for c in self.invoice.credits)
         amount_paid = paid_cents + credit_cents
-        balance_due = self.invoice.total_cents - amount_paid
+        balance_due = invoice_balance_cents(self.invoice)
         data.append(
             ["", "", "", self._get("invoice_amount_paid_label", "Amount Paid"), "", self._fmt(amount_paid)]
         )

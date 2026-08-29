@@ -6,6 +6,7 @@ from PySide6.QtCore import QPoint, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
@@ -24,6 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from invoice_manager.domain.invoices import STANDARD_UNITS
 from invoice_manager.persistence.models import ServiceItem
 from invoice_manager.ui.app_context import AppContext
 
@@ -50,6 +52,12 @@ class ServiceItemDialog(QDialog):
         self._description = QLineEdit()
         form.addRow("Description:", self._description)
 
+        self._unit = QComboBox()
+        self._unit.setEditable(True)
+        self._unit.addItems(list(STANDARD_UNITS))
+        self._unit.setCurrentText("ea")
+        form.addRow("Unit:", self._unit)
+
         self._price = QDoubleSpinBox()
         self._price.setMaximum(9999999.99)
         self._price.setMinimum(0)
@@ -64,6 +72,7 @@ class ServiceItemDialog(QDialog):
 
         if self._item is not None:
             self._description.setText(self._item.description)
+            self._unit.setCurrentText(self._item.unit or "ea")
             self._price.setValue(self._item.unit_price_cents / 100)
             self._taxable.setChecked(self._item.taxable)
 
@@ -79,17 +88,22 @@ class ServiceItemDialog(QDialog):
         if not description:
             QMessageBox.warning(self, "Missing description", "Description is required.")
             return
+        unit = self._unit.currentText().strip()
+        if not unit:
+            QMessageBox.warning(self, "Missing unit", "Select or enter a unit.")
+            return
         price_cents = int(round(self._price.value() * 100))
         if self._item is None:
             self._context.service_repo.create(
                 description=description,
                 unit_price_cents=price_cents,
                 taxable=self._taxable.isChecked(),
-                unit="ea",
+                unit=unit,
             )
         else:
             self._item.description = description
             self._item.unit_price_cents = price_cents
+            self._item.unit = unit
             self._item.taxable = self._taxable.isChecked()
         self._context.session.commit()
         self.accept()

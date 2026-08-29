@@ -36,7 +36,11 @@ from invoice_manager.documents.invoice_docx import generate_invoice_docx
 from invoice_manager.documents.invoice_pdf import generate_invoice_pdf
 from invoice_manager.documents.invoice_xlsx import generate_invoice_xlsx
 from invoice_manager.documents.reminder_pdf import generate_reminder_pdf
-from invoice_manager.domain.invoices import calculate_line_total
+from invoice_manager.domain.invoices import (
+    STANDARD_UNITS,
+    calculate_discount_cents,
+    calculate_line_total,
+)
 from invoice_manager.domain.money import Money
 from invoice_manager.persistence.models import Client, Invoice
 from invoice_manager.ui.app_context import AppContext
@@ -124,9 +128,9 @@ class InvoiceEditorDialog(QDialog):
         layout.addLayout(form)
 
         layout.addWidget(QLabel("Line items"))
-        self._table = QTableWidget(0, 6)
+        self._table = QTableWidget(0, 7)
         self._table.setHorizontalHeaderLabels(
-            ["Description", "Qty", "Price", "Taxable", "Discount", "Total"]
+            ["Description", "Qty", "Unit", "Price", "Taxable", "Discount ($ or %)", "Total"]
         )
         self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -169,9 +173,6 @@ class InvoiceEditorDialog(QDialog):
         self._update_btn.clicked.connect(self._update)
         layout.addWidget(bbox)
 
-        if self._invoice is None:
-            self._add_line()
-
     def _load_clients(self, selected_id: int | None = None) -> None:
         current_text = self._client.currentText()
         self._clients = self._context.client_repo.list_active()
@@ -195,6 +196,7 @@ class InvoiceEditorDialog(QDialog):
     def _load_services(self, selected_id: int | None = None) -> None:
         self._service_combo.clear()
         self._service_combo.addItem("-- select a service --", 0)
+        self._service_combo.addItem("Other — enter manually", "other")
         for item in self._context.service_repo.list_active():
             self._service_combo.addItem(item.description, item.id)
         if selected_id is not None:
@@ -262,9 +264,10 @@ class InvoiceEditorDialog(QDialog):
                 quantity=item.quantity,
                 unit_price_cents=item.unit_price_cents,
                 taxable=item.taxable,
+                unit=item.unit or "ea",
             )
             row = self._table.rowCount() - 1
-            discount_item = self._table.item(row, 4)
+            discount_item = self._table.item(row, 5)
             if discount_item is not None:
                 discount_item.setText(f"{item.discount_cents / 100:.2f}")
         self._table.blockSignals(False)
@@ -302,6 +305,7 @@ class InvoiceEditorDialog(QDialog):
         quantity: int = 1,
         unit_price_cents: int = 0,
         taxable: bool | None = None,
+        unit: str = "ea",
     ) -> None:
         if taxable is None:
             taxable = self._context.setting_repo.get("default_taxable") == "1"
@@ -309,18 +313,29 @@ class InvoiceEditorDialog(QDialog):
         self._table.insertRow(row)
         self._table.setItem(row, 0, QTableWidgetItem(description))
         self._table.setItem(row, 1, QTableWidgetItem(str(quantity)))
-        self._table.setItem(row, 2, QTableWidgetItem(f"{unit_price_cents / 100:.2f}"))
+        unit_combo = QComboBox()
+        unit_combo.setEditable(True)
+        unit_combo.addItems(list(STANDARD_UNITS))
+        unit_combo.setCurrentText(unit)
+        self._table.setCellWidget(row, 2, unit_combo)
+        self._table.setItem(row, 3, QTableWidgetItem(f"{unit_price_cents / 100:.2f}"))
         chk = QTableWidgetItem()
         chk.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
         chk.setCheckState(Qt.CheckState.Checked if taxable else Qt.CheckState.Unchecked)
-        self._table.setItem(row, 3, chk)
-        self._table.setItem(row, 4, QTableWidgetItem("0.00"))
-        self._table.setItem(row, 5, QTableWidgetItem("$0.00"))
+        self._table.setItem(row, 4, chk)
+        self._table.setItem(row, 5, QTableWidgetItem("0.00"))
+        self._table.setItem(row, 6, QTableWidgetItem("$0.00"))
         self._recalc()
 
     def _add_service_line(self) -> None:
         service_id = self._service_combo.currentData()
         if service_id is None or service_id == 0:
+            return
+        if service_id == "other":
+            self._add_line(description="")
+            self._service_combo.setCurrentIndex(0)
+            self._table.setCurrentCell(self._table.rowCount() - 1, 0)
+            self._table.editItem(self._table.currentItem())
             return
         item = self._context.service_repo.get(int(service_id))
         if item is None:
@@ -330,6 +345,7 @@ class InvoiceEditorDialog(QDialog):
             quantity=1,
             unit_price_cents=item.unit_price_cents,
             taxable=item.taxable,
+            unit=item.unit or "ea",
         )
         self._service_combo.setCurrentIndex(0)
 
@@ -346,11 +362,11 @@ class InvoiceEditorDialog(QDialog):
         total = 0
         for row in range(self._table.rowCount()):
             qty = self._int_at(row, 1, 1)
-            price = self._cents_at(row, 2)
-            discount = self._cents_at(row, 4)
-            taxable = self._item_check(row, 3)
+            price = self._cents_at(row, 3)
+            discount = self._discount_cents_at(row, qty, price)
+            taxable = self._item_check(row, 4)
             s, g, t = calculate_line_total(qty, price, discount, taxable, gst_rate)
-            self._set_item_text(row, 5, f"${t / 100:.2f}")
+            self._set_item_text(row, 6, f"${t / 100:.2f}")
             subtotal += s
             gst += g
             total += t
@@ -370,9 +386,19 @@ class InvoiceEditorDialog(QDialog):
         except Exception:
             return 0
 
+    def _discount_cents_at(self, row: int, quantity: int, unit_price_cents: int) -> int:
+        return calculate_discount_cents(self._item_text(row, 5), quantity, unit_price_cents)
+
     def _item_text(self, row: int, col: int, default: str = "") -> str:
         item = self._table.item(row, col)
         return item.text() if item is not None else default
+
+    def _unit_text(self, row: int) -> str:
+        widget = self._table.cellWidget(row, 2)
+        if isinstance(widget, QComboBox):
+            return widget.currentText().strip()
+        item = self._table.item(row, 2)
+        return item.text().strip() if item is not None else ""
 
     def _item_check(self, row: int, col: int) -> bool:
         item = self._table.item(row, col)
@@ -390,9 +416,12 @@ class InvoiceEditorDialog(QDialog):
                 {
                     "description": self._item_text(row, 0) or "Item",
                     "quantity": self._int_at(row, 1, 1),
-                    "unit_price_cents": self._cents_at(row, 2),
-                    "discount_cents": self._cents_at(row, 4),
-                    "taxable": self._item_check(row, 3),
+                    "unit": self._unit_text(row) or "ea",
+                    "unit_price_cents": self._cents_at(row, 3),
+                    "discount_cents": self._discount_cents_at(
+                        row, self._int_at(row, 1, 1), self._cents_at(row, 3)
+                    ),
+                    "taxable": self._item_check(row, 4),
                 }
             )
         return lines
@@ -510,6 +539,7 @@ class InvoiceEditorDialog(QDialog):
             generate_invoice_pdf(invoice, settings, pdf_path)
             invoice.pdf_path = str(pdf_path)
             self._context.session.commit()
+            os.startfile(str(pdf_path))
             QMessageBox.information(
                 self, "Saved", f"Invoice {invoice.number} updated and PDF saved."
             )

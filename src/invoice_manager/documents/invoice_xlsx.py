@@ -11,6 +11,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
 from invoice_manager.domain.money import Money
+from invoice_manager.domain.statuses import invoice_balance_cents
 from invoice_manager.persistence.models import Invoice
 
 
@@ -60,7 +61,7 @@ def generate_invoice_xlsx(invoice: Invoice, settings: dict[str, Any], output_pat
     paid_cents = sum(p.amount_cents for p in invoice.payments if not p.is_reversed)
     credit_cents = sum(c.amount_cents for c in invoice.credits)
     amount_paid = paid_cents + credit_cents
-    balance_due = invoice.total_cents - amount_paid
+    balance_due = invoice_balance_cents(invoice)
 
     status = "Paid" if balance_due <= 0 else "Unpaid"
     if invoice.is_cancelled:

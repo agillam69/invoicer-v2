@@ -9,7 +9,7 @@ from invoice_manager.application.ledger_service import LedgerService
 from invoice_manager.domain.numbering import NumberingService
 from invoice_manager.domain.statuses import derive_invoice_status
 from invoice_manager.infrastructure.audit import AuditService
-from invoice_manager.persistence.models import Invoice, Payment
+from invoice_manager.persistence.models import Invoice, Payment, Receipt
 from invoice_manager.persistence.repositories import (
     InvoiceRepository,
     PaymentRepository,
@@ -69,6 +69,8 @@ class PaymentService:
             raise PaymentServiceError("Cannot record payment against a draft invoice")
         if invoice.is_void:
             raise PaymentServiceError("Cannot record payment against a void invoice")
+        if invoice.status == "duplicate":
+            raise PaymentServiceError("Cannot record payment against a duplicate invoice")
         if amount_cents <= 0:
             raise PaymentServiceError("Payment amount must be positive")
 
@@ -103,6 +105,60 @@ class PaymentService:
             )
         return payment
 
+    def record_manual_receipt(
+        self,
+        client_name: str,
+        amount_cents: int,
+        receipt_date: date,
+        method: str,
+        client_id: int | None = None,
+        client_address: str | None = None,
+        reference: str | None = None,
+        description: str | None = None,
+        notes: str | None = None,
+    ) -> Receipt:
+        name = client_name.strip()
+        if not name:
+            raise PaymentServiceError("Client or payer name is required")
+        if amount_cents <= 0:
+            raise PaymentServiceError("Receipt amount must be positive")
+        number = self._numbering.reserve("receipt")
+        receipt = Receipt(
+            number=number,
+            client_id=client_id,
+            client_name=name,
+            client_address=client_address,
+            date=receipt_date,
+            amount_cents=amount_cents,
+            method=method.strip(),
+            reference=reference,
+            description=description,
+            notes=notes,
+        )
+        self._payment_repo._session.add(receipt)
+        self._payment_repo._session.flush()
+        self._persist_numbering()
+        self._audit.record(
+            "manual_receipt_recorded",
+            "receipts",
+            receipt.id,
+            {"number": number, "client": name, "amount_cents": amount_cents},
+        )
+        if self._ledger_service is not None:
+            self._ledger_service.add_entry(
+                entry_date=receipt_date,
+                entry_type="in",
+                category="Other Receipt",
+                description=description or f"Receipt from {name}",
+                amount_cents=amount_cents,
+                reference=number,
+                notes=notes,
+            )
+        return receipt
+
+    def list_manual_receipts(self) -> list[Receipt]:
+        return list(self._payment_repo._session.query(Receipt).order_by(Receipt.date.desc()).all())
+
     def reverse(self, payment: Payment, reason: str) -> Payment:
         if payment.is_reversed:
             raise PaymentServiceError("Payment is already reversed")
@@ -131,7 +187,8 @@ class PaymentService:
 
     def _update_invoice_status(self, invoice: Invoice) -> None:
         total_paid = sum(p.amount_cents for p in invoice.payments if not p.is_reversed)
-        balance = invoice.total_cents - total_paid
+        total_credited = sum(c.amount_cents for c in invoice.credits)
+        balance = invoice.total_cents - total_paid - total_credited
         invoice.status = derive_invoice_status(
             invoice_total_cents=invoice.total_cents,
             balance_cents=balance,

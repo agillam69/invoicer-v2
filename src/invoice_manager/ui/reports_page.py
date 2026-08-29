@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 )
 
 from invoice_manager.documents.invoice_pdf import generate_report_pdf
+from invoice_manager.domain.statuses import invoice_balance_cents
 from invoice_manager.persistence.models import AuditLog, Invoice, LedgerEntry
 from invoice_manager.ui.app_context import AppContext
 
@@ -180,8 +181,7 @@ class SummaryTab(_BaseReportTab):
                 continue
             by_status[inv.status] += inv.total_cents
             total_invoiced += inv.total_cents
-            paid = sum(p.amount_cents for p in inv.payments if not p.is_reversed)
-            total_outstanding += inv.total_cents - paid
+            total_outstanding += invoice_balance_cents(inv)
 
         lines = ["Invoice Summary", "-" * 20]
         for status, cents in sorted(by_status.items()):
@@ -303,7 +303,17 @@ class InvoicesTab(_BaseReportTab):
         filter_bar = QHBoxLayout()
         self._status_filter = QComboBox()
         self._status_filter.addItems(
-            ["All", "Issued", "Paid", "Part paid", "Overdue", "Draft", "Cancelled", "Void"]
+            [
+                "All",
+                "Issued",
+                "Paid",
+                "Part paid",
+                "Overdue",
+                "Draft",
+                "Duplicate",
+                "Cancelled",
+                "Void",
+            ]
         )
         self._status_filter.currentTextChanged.connect(self.refresh)
         self._client_filter = QLineEdit()
@@ -359,8 +369,7 @@ class InvoicesTab(_BaseReportTab):
                 if status == "overdue":
                     if inv.is_draft or inv.is_cancelled or inv.is_void:
                         continue
-                    paid = sum(p.amount_cents for p in inv.payments if not p.is_reversed)
-                    balance = inv.total_cents - paid
+                    balance = invoice_balance_cents(inv)
                     if balance <= 0:
                         continue
                     due = inv.due_date
@@ -373,7 +382,7 @@ class InvoicesTab(_BaseReportTab):
                     continue
 
             paid = sum(p.amount_cents for p in inv.payments if not p.is_reversed)
-            balance = inv.total_cents - paid
+            balance = invoice_balance_cents(inv)
             rows.append(
                 [
                     inv.number,
@@ -602,8 +611,7 @@ class AgeingTab(_BaseReportTab):
         for inv in self._context.session.query(Invoice).all():
             if inv.is_draft or inv.is_cancelled or inv.is_void:
                 continue
-            paid = sum(p.amount_cents for p in inv.payments if not p.is_reversed)
-            balance = inv.total_cents - paid
+            balance = invoice_balance_cents(inv)
             if balance <= 0:
                 continue
             due = inv.due_date

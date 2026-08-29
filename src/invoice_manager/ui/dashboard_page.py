@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from invoice_manager.domain.statuses import invoice_balance_cents
 from invoice_manager.ui.app_context import AppContext
 
 
@@ -70,8 +71,7 @@ class DashboardPage(QWidget):
         for inv in invoices:
             if inv.is_void or inv.is_cancelled or inv.is_draft:
                 continue
-            paid = sum(p.amount_cents for p in inv.payments if not p.is_reversed)
-            balance = inv.total_cents - paid
+            balance = invoice_balance_cents(inv)
             if balance > 0:
                 unpaid_total += balance
                 due = cast(date, inv.due_date)

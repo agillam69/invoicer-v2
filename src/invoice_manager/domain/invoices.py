@@ -8,6 +8,24 @@ from typing import Any
 
 from invoice_manager.domain.money import Money
 
+STANDARD_UNITS = (
+    "ea",
+    "item",
+    "service",
+    "hour",
+    "day",
+    "week",
+    "month",
+    "session",
+    "visit",
+    "consultation",
+    "report",
+    "page",
+    "kilometre",
+    "package",
+    "fixed fee",
+)
+
 
 @dataclass(frozen=True)
 class LineItemInput:
@@ -15,6 +33,19 @@ class LineItemInput:
     unit_price_cents: int = 0
     discount_cents: int = 0
     taxable: bool = True
+
+
+def calculate_discount_cents(value: str, quantity: int, unit_price_cents: int) -> int:
+    text = value.strip()
+    try:
+        if text.endswith("%"):
+            percentage = Decimal(text[:-1].strip())
+            amount = Decimal(quantity * unit_price_cents) * percentage / 100
+        else:
+            amount = Decimal(text or "0") * 100
+        return max(0, int(amount.quantize(Decimal("1"), rounding=ROUND_HALF_UP)))
+    except Exception:
+        return 0
 
 
 def calculate_line_total(

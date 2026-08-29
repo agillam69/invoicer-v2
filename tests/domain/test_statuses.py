@@ -1,6 +1,18 @@
 from datetime import date, timedelta
+from types import SimpleNamespace
 
-from invoice_manager.domain.statuses import InvoiceStatus, derive_invoice_status
+from invoice_manager.domain.statuses import (
+    InvoiceStatus,
+    derive_invoice_status,
+    invoice_balance_cents,
+)
+
+
+def test_paid_and_duplicate_effective_balances_are_zero():
+    invoice = SimpleNamespace(total_cents=10000, payments=[], credits=[], status="paid")
+    assert invoice_balance_cents(invoice) == 0
+    invoice.status = "duplicate"
+    assert invoice_balance_cents(invoice) == 0
 
 
 def test_paid_when_balance_zero():

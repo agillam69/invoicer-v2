@@ -30,6 +30,7 @@ from invoice_manager.documents.invoice_pdf import generate_invoice_pdf
 from invoice_manager.documents.invoice_xlsx import generate_invoice_xlsx
 from invoice_manager.documents.reminder_pdf import generate_reminder_pdf
 from invoice_manager.domain.money import Money
+from invoice_manager.domain.statuses import invoice_balance_cents
 from invoice_manager.persistence.models import Invoice
 from invoice_manager.ui.app_context import AppContext
 from invoice_manager.ui.credit_note_dialog import CreditNoteDialog
@@ -77,6 +78,7 @@ class InvoiceListPage(QWidget):
             ("Issued", "issued"),
             ("Part paid", "part_paid"),
             ("Paid", "paid"),
+            ("Duplicate", "duplicate"),
             ("Overdue", "overdue"),
             ("Cancelled", "cancelled"),
             ("Void", "void"),
@@ -144,11 +146,7 @@ class InvoiceListPage(QWidget):
         self._apply_filter()
 
     def _balance(self, inv: Invoice) -> int:
-        return (
-            inv.total_cents
-            - sum(p.amount_cents for p in inv.payments if not p.is_reversed)
-            - sum(c.amount_cents for c in inv.credits)
-        )
+        return invoice_balance_cents(inv)
 
     def _apply_filter(self) -> None:
         text = self._filter_text.text().strip().lower()
@@ -171,9 +169,13 @@ class InvoiceListPage(QWidget):
             status_combo.addItem(inv.status.replace("_", " ").title(), inv.status)
             if inv.is_draft:
                 status_combo.addItem("Issued", "issued")
-            elif not inv.is_void and not inv.is_cancelled:
+            elif not inv.is_void and not inv.is_cancelled and inv.status != "duplicate":
                 if not inv.payments and not inv.credits:
                     status_combo.addItem("Draft", "draft")
+                if self._balance(inv) > 0:
+                    status_combo.addItem("Paid", "paid")
+                if not inv.payments and not inv.credits:
+                    status_combo.addItem("Duplicate", "duplicate")
                 status_combo.addItem("Cancelled", "cancelled")
                 status_combo.addItem("Void", "void")
             status_combo.currentIndexChanged.connect(
@@ -189,8 +191,22 @@ class InvoiceListPage(QWidget):
         try:
             if target == "issued":
                 self._context.invoice_service.issue(invoice)
+            elif target == "paid":
+                dialog = RecordPaymentDialog(self._context, invoice=invoice, parent=self)
+                if dialog.exec() != 1:
+                    combo.setCurrentIndex(0)
+                self.refresh()
+                return
             elif target == "draft":
                 self._context.invoice_service.retract(invoice)
+            elif target == "duplicate":
+                reason, ok = QInputDialog.getText(
+                    self, "Mark duplicate", f"Reason {invoice.number} is a duplicate:"
+                )
+                if not ok or not reason.strip():
+                    combo.setCurrentIndex(0)
+                    return
+                self._context.invoice_service.mark_duplicate(invoice, reason.strip())
             elif target in {"cancelled", "void"}:
                 reason, ok = QInputDialog.getText(
                     self,

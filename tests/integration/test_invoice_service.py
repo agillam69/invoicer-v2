@@ -119,6 +119,15 @@ def test_cancel_invoice(invoice_deps):
     assert inv.status == InvoiceStatus.CANCELLED.value
 
 
+def test_mark_duplicate_sets_terminal_zero_balance_status(invoice_deps):
+    service, client, _session = invoice_deps
+    inv = service.create_draft(client.id)
+    service.add_line(inv, "Duplicate work", 1, 10000)
+    service.issue(inv)
+    service.mark_duplicate(inv, "Entered twice")
+    assert inv.status == InvoiceStatus.DUPLICATE.value
+
+
 def test_void_invoice(invoice_deps):
     service, client, session = invoice_deps
     inv = service.create_draft(client.id)
@@ -212,6 +221,43 @@ def test_cannot_update_void_invoice(invoice_deps):
                 }
             ],
         )
+
+
+def test_manual_invoice_with_lines_is_itemised_and_recalculated(invoice_deps):
+    service, _client, session = invoice_deps
+    inv = service.record_manual_invoice(
+        number="INV-0042",
+        client_name="Acme Corp",
+        client_address=None,
+        issue_date=date.today(),
+        due_date=date.today() + timedelta(days=7),
+        subtotal_cents=1,
+        gst_cents=1,
+        total_cents=2,
+        lines=[
+            {
+                "description": "Manual consulting",
+                "quantity": 2,
+                "unit_price_cents": 10000,
+                "discount_cents": 1000,
+                "taxable": True,
+            },
+            {
+                "description": "Expenses",
+                "quantity": 1,
+                "unit_price_cents": 5000,
+                "discount_cents": 0,
+                "taxable": False,
+            },
+        ],
+    )
+    session.flush()
+    assert len(inv.items) == 2
+    assert inv.items[0].description == "Manual consulting"
+    assert inv.subtotal_cents == 24000
+    assert inv.gst_cents == 1900
+    assert inv.total_cents == 25900
+    assert inv.is_draft is False
 
 
 def test_credit_note_reduces_balance_and_status(invoice_deps):

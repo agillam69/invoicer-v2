@@ -18,4 +18,7 @@ def test_login_dialog_opens(qtbot, db):
     dlg = LoginDialog()
     qtbot.addWidget(dlg)
     assert dlg.windowTitle() == "Login — Invoice & Receipt Manager"
+    dlg.focus_login()
+    qtbot.waitExposed(dlg)
+    assert dlg.focusWidget() is dlg._username
     dlg.reject()

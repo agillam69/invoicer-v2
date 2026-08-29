@@ -162,6 +162,28 @@ class Payment(Base):
     invoice: Mapped[Invoice | None] = relationship("Invoice", back_populates="payments")
 
 
+class Receipt(Base):
+    __tablename__ = "receipts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    number: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    client_id: Mapped[int | None] = mapped_column(ForeignKey("clients.id"))
+    client_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    client_address: Mapped[str | None] = mapped_column(Text)
+    date: Mapped[Date] = mapped_column(Date, nullable=False)
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    method: Mapped[str | None] = mapped_column(String(64))
+    reference: Mapped[str | None] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(String(500))
+    notes: Mapped[str | None] = mapped_column(Text)
+    pdf_path: Mapped[str | None] = mapped_column(String(500))
+    docx_path: Mapped[str | None] = mapped_column(String(500))
+    xlsx_path: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.now(UTC).replace(tzinfo=None)
+    )
+
+
 class CreditNote(Base):
     __tablename__ = "credit_notes"
 

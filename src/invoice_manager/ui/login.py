@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -32,6 +33,7 @@ def run_login_flow(config: AppConfig) -> str | None:
         session.commit()
 
         dialog = LoginDialog()
+        QTimer.singleShot(0, dialog.focus_login)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return None
 
@@ -74,6 +76,12 @@ class LoginDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def focus_login(self) -> None:
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        self._username.setFocus()
 
     def username(self) -> str:
         return self._username.text().strip()
