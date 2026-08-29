@@ -7,7 +7,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, cast
 
-from PySide6.QtCore import QDate
+from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QLabel,
     QLineEdit,
+    QMenu,
     QMessageBox,
     QPushButton,
     QTableWidget,
@@ -135,6 +136,13 @@ class RecordPaymentDialog(QDialog):
                 "business_name",
                 "business_address",
                 "thank_you_note",
+                "receipt_title",
+                "receipt_invoice_label",
+                "receipt_date_label",
+                "receipt_amount_label",
+                "receipt_method_label",
+                "receipt_reference_label",
+                "receipt_thank_you",
             ]
         }
         receipt_path = (
@@ -147,6 +155,7 @@ class RecordPaymentDialog(QDialog):
         generate_receipt_pdf(payment, invoice, settings, receipt_path)
         payment.pdf_path = str(receipt_path)
         self._context.session.commit()
+        os.startfile(str(receipt_path))
 
 
 class IssueReceiptDialog(QDialog):
@@ -211,6 +220,13 @@ class IssueReceiptDialog(QDialog):
                     "business_name",
                     "business_address",
                     "thank_you_note",
+                    "receipt_title",
+                    "receipt_invoice_label",
+                    "receipt_date_label",
+                    "receipt_amount_label",
+                    "receipt_method_label",
+                    "receipt_reference_label",
+                    "receipt_thank_you",
                 ]
             }
             receipt_path = (
@@ -224,6 +240,7 @@ class IssueReceiptDialog(QDialog):
             payment.pdf_path = str(receipt_path)
             self._context.session.commit()
             self._load_payments()
+            os.startfile(str(receipt_path))
             QMessageBox.information(self, "Receipt saved", f"Saved {receipt_path}")
         except Exception as exc:  # noqa: BLE001
             QMessageBox.warning(self, "Receipt failed", str(exc))
@@ -260,6 +277,9 @@ class PaymentsPage(QWidget):
         self._table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._table.doubleClicked.connect(self._open_pdf)
+        self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._table.customContextMenuRequested.connect(self._context_menu)
         layout.addWidget(self._table)
 
         action_bar = QHBoxLayout()
@@ -298,6 +318,12 @@ class PaymentsPage(QWidget):
         if not rows:
             return None
         return self._payments[rows[0].row()]
+
+    def _context_menu(self, position: Any) -> None:
+        menu = QMenu(self)
+        menu.addAction("Open PDF", self._open_pdf)
+        menu.addAction("Reverse", self._reverse_payment)
+        menu.exec(self._table.viewport().mapToGlobal(position))
 
     def _open_pdf(self) -> None:
         payment = self._selected_payment()

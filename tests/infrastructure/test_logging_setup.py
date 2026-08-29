@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import logging
 
-import pytest
-
 from invoice_manager.infrastructure.logging_setup import get_exe_log_path, setup_logging
 
 

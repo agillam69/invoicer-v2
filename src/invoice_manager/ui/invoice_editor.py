@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import os
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from typing import Any, cast
 
 from PySide6.QtCore import QDate, Qt
@@ -16,20 +18,28 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
+    QInputDialog,
     QLabel,
+    QMenu,
     QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
     QTextEdit,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
+from invoice_manager.documents.invoice_docx import generate_invoice_docx
 from invoice_manager.documents.invoice_pdf import generate_invoice_pdf
+from invoice_manager.documents.invoice_xlsx import generate_invoice_xlsx
+from invoice_manager.documents.reminder_pdf import generate_reminder_pdf
 from invoice_manager.domain.invoices import calculate_line_total
+from invoice_manager.domain.money import Money
 from invoice_manager.persistence.models import Client, Invoice
 from invoice_manager.ui.app_context import AppContext
+from invoice_manager.ui.invoice_history_dialog import InvoiceHistoryDialog
 
 
 class InvoiceEditorDialog(QDialog):
@@ -117,6 +127,12 @@ class InvoiceEditorDialog(QDialog):
         totals.addStretch()
         layout.addLayout(totals)
 
+        self._actions_btn = QToolButton()
+        self._actions_btn.setText("Actions")
+        self._actions_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self._actions_btn.setVisible(False)
+        layout.addWidget(self._actions_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+
         bbox = QDialogButtonBox()
         self._save_draft_btn = bbox.addButton("Save Draft", QDialogButtonBox.ButtonRole.ActionRole)
         self._issue_btn = bbox.addButton("Issue", QDialogButtonBox.ButtonRole.ActionRole)
@@ -191,6 +207,8 @@ class InvoiceEditorDialog(QDialog):
             self._issue_btn.setVisible(False)
             self._update_btn.setVisible(True)
             self._client.setEnabled(False)
+        self._actions_btn.setVisible(True)
+        self._actions_btn.setMenu(self._build_actions_menu())
 
     def _update_due_date(self) -> None:
         terms = int(self._context.setting_repo.get("payment_terms_days") or 7)
@@ -400,3 +418,274 @@ class InvoiceEditorDialog(QDialog):
             )
         except Exception as exc:  # noqa: BLE001
             QMessageBox.warning(self, "PDF failed", str(exc))
+
+    def _build_actions_menu(self) -> QMenu:
+        menu = QMenu(self)
+        inv = self._invoice
+        assert inv is not None
+
+        menu.addAction("Open PDF", self._open_pdf)
+        menu.addAction("Regenerate PDF", self._regenerate_pdf)
+        menu.addAction("Generate Excel", self._generate_xlsx)
+        menu.addAction("Generate Word", self._generate_docx)
+        menu.addAction("Generate reminder", self._generate_reminder)
+        menu.addSeparator()
+        menu.addAction("Record payment", self._record_payment)
+        menu.addAction("Issue receipt", self._issue_receipt)
+        menu.addAction("Credit note", self._credit_note)
+        menu.addAction("Write off balance", self._write_off_balance)
+        menu.addSeparator()
+        menu.addAction("Duplicate invoice", self._duplicate_invoice)
+        menu.addAction("View history", self._view_history)
+        menu.addSeparator()
+        menu.addAction("Retract to draft", self._retract_invoice)
+        menu.addAction("Reissue", self._reissue_invoice)
+        menu.addAction("Cancel", self._cancel_invoice)
+        menu.addAction("Void", self._void_invoice)
+        return menu
+
+    def _invoice_settings(self) -> dict[str, Any]:
+        keys = [
+            "business_name",
+            "business_address",
+            "gst_rate",
+            "bank_name",
+            "bank_bsb",
+            "bank_account",
+            "bank_account_name",
+            "thank_you_note",
+        ] + [
+            "invoice_title_tax",
+            "invoice_title",
+            "invoice_date_label",
+            "invoice_due_date_label",
+            "invoice_client_label",
+            "invoice_address_label",
+            "invoice_description_header",
+            "invoice_qty_header",
+            "invoice_unit_header",
+            "invoice_price_header",
+            "invoice_gst_header",
+            "invoice_total_header",
+            "invoice_subtotal_label",
+            "invoice_gst_label",
+            "invoice_total_label",
+            "invoice_payment_details_label",
+            "invoice_bank_label",
+            "invoice_bsb_label",
+            "invoice_account_label",
+            "invoice_account_name_label",
+            "invoice_notes_label",
+            "invoice_thank_you",
+        ]
+        return {k: self._context.setting_repo.get(k) for k in keys}
+
+    def _document_path(self, folder: str, ext: str) -> Path:
+        assert self._invoice is not None
+        return (
+            self._context.config.get_data_directory()
+            / "documents"
+            / folder
+            / str(cast(date, self._invoice.issue_date).year)
+            / f"{self._invoice.number}.{ext}"
+        )
+
+    def _open_pdf(self) -> None:
+        assert self._invoice is not None
+        if not self._invoice.pdf_path:
+            QMessageBox.information(self, "No PDF", "This invoice does not have a PDF yet.")
+            return
+        path = Path(self._invoice.pdf_path)
+        if not path.exists():
+            QMessageBox.warning(self, "Missing", f"PDF not found: {path}")
+            return
+        os.startfile(str(path))
+
+    def _regenerate_pdf(self) -> None:
+        assert self._invoice is not None
+        if self._invoice.is_draft:
+            QMessageBox.information(self, "Not issued", "Draft invoices do not have a PDF.")
+            return
+        try:
+            pdf_path = self._document_path("invoices", "pdf")
+            generate_invoice_pdf(self._invoice, self._invoice_settings(), pdf_path)
+            self._invoice.pdf_path = str(pdf_path)
+            self._context.session.commit()
+            os.startfile(str(pdf_path))
+            QMessageBox.information(self, "PDF regenerated", f"Saved {pdf_path}")
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "PDF failed", str(exc))
+
+    def _generate_xlsx(self) -> None:
+        assert self._invoice is not None
+        if self._invoice.is_draft:
+            QMessageBox.information(self, "Not issued", "Draft invoices cannot be exported.")
+            return
+        try:
+            xlsx_path = self._document_path("invoices", "xlsx")
+            generate_invoice_xlsx(self._invoice, self._invoice_settings(), xlsx_path)
+            os.startfile(str(xlsx_path))
+            QMessageBox.information(self, "Excel saved", f"Saved {xlsx_path}")
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Excel failed", str(exc))
+
+    def _generate_docx(self) -> None:
+        assert self._invoice is not None
+        if self._invoice.is_draft:
+            QMessageBox.information(self, "Not issued", "Draft invoices cannot be exported.")
+            return
+        try:
+            docx_path = self._document_path("invoices", "docx")
+            generate_invoice_docx(self._invoice, self._invoice_settings(), docx_path)
+            os.startfile(str(docx_path))
+            QMessageBox.information(self, "Word saved", f"Saved {docx_path}")
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Word failed", str(exc))
+
+    def _generate_reminder(self) -> None:
+        assert self._invoice is not None
+        if self._invoice.is_draft or self._invoice.is_void or self._invoice.is_cancelled:
+            QMessageBox.information(
+                self, "Cannot remind", "Only issued invoices can receive reminders."
+            )
+            return
+        settings = {
+            k: self._context.setting_repo.get(k)
+            for k in [
+                "business_name",
+                "business_address",
+                "bank_name",
+                "bank_bsb",
+                "bank_account",
+                "bank_account_name",
+                "report_footer",
+            ]
+        }
+        try:
+            reminder_path = self._document_path("reminders", "pdf")
+            generate_reminder_pdf(self._invoice, settings, reminder_path)
+            os.startfile(str(reminder_path))
+            QMessageBox.information(self, "Reminder saved", f"Saved {reminder_path}")
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Reminder failed", str(exc))
+
+    def _record_payment(self) -> None:
+        from invoice_manager.ui.payments_page import RecordPaymentDialog
+
+        assert self._invoice is not None
+        dlg = RecordPaymentDialog(self._context, invoice=self._invoice, parent=self)
+        if dlg.exec() == 1:
+            self.accept()
+
+    def _issue_receipt(self) -> None:
+        from invoice_manager.ui.payments_page import IssueReceiptDialog
+
+        assert self._invoice is not None
+        dlg = IssueReceiptDialog(self._context, self._invoice, parent=self)
+        if dlg.exec() == 1:
+            self.accept()
+
+    def _credit_note(self) -> None:
+        from invoice_manager.ui.credit_note_dialog import CreditNoteDialog
+
+        assert self._invoice is not None
+        dlg = CreditNoteDialog(self._context, self._invoice, parent=self)
+        if dlg.exec() == 1:
+            self.accept()
+
+    def _write_off_balance(self) -> None:
+        assert self._invoice is not None
+        if self._invoice.is_draft or self._invoice.is_void or self._invoice.is_cancelled:
+            QMessageBox.information(
+                self, "Cannot write off", "Only issued invoices can be written off."
+            )
+            return
+        balance = (
+            self._invoice.total_cents
+            - sum(p.amount_cents for p in self._invoice.payments if not p.is_reversed)
+            - sum(c.amount_cents for c in self._invoice.credits)
+        )
+        if balance <= 0:
+            QMessageBox.information(self, "No balance", "This invoice has no outstanding balance.")
+            return
+        reason, ok = QInputDialog.getText(
+            self, "Write off balance", f"Reason for writing off {Money(cents=balance)}:"
+        )
+        if not ok or not reason.strip():
+            return
+        try:
+            self._context.invoice_service.add_credit_note(
+                self._invoice, balance, reason.strip(), date.today()
+            )
+            self._context.session.commit()
+            self.accept()
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Write-off failed", str(exc))
+
+    def _duplicate_invoice(self) -> None:
+        assert self._invoice is not None
+        try:
+            self._context.invoice_service.clone_invoice(self._invoice)
+            self._context.session.commit()
+            self.accept()
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Duplicate failed", str(exc))
+
+    def _view_history(self) -> None:
+        assert self._invoice is not None
+        dlg = InvoiceHistoryDialog(self._context, self._invoice, parent=self)
+        dlg.exec()
+
+    def _retract_invoice(self) -> None:
+        assert self._invoice is not None
+        if self._invoice.is_draft or self._invoice.is_void or self._invoice.is_cancelled:
+            QMessageBox.information(self, "Cannot retract", "Only issued invoices can be retracted.")
+            return
+        try:
+            self._context.invoice_service.retract(self._invoice)
+            self._context.session.commit()
+            self.accept()
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Retract failed", str(exc))
+
+    def _reissue_invoice(self) -> None:
+        assert self._invoice is not None
+        if self._invoice.is_draft or self._invoice.is_void or self._invoice.is_cancelled:
+            QMessageBox.information(self, "Cannot reissue", "Only issued invoices can be reissued.")
+            return
+        try:
+            self._context.invoice_service.reissue(self._invoice)
+            self._context.session.commit()
+            self.accept()
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Reissue failed", str(exc))
+
+    def _cancel_invoice(self) -> None:
+        assert self._invoice is not None
+        if self._invoice.is_draft or self._invoice.is_void or self._invoice.is_cancelled:
+            QMessageBox.information(self, "Cannot cancel", "This invoice cannot be cancelled.")
+            return
+        reason, ok = QInputDialog.getText(self, "Cancel invoice", "Reason for cancellation:")
+        if not ok or not reason.strip():
+            return
+        try:
+            self._context.invoice_service.cancel(self._invoice, reason.strip())
+            self._context.session.commit()
+            self.accept()
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Cancel failed", str(exc))
+
+    def _void_invoice(self) -> None:
+        assert self._invoice is not None
+        if self._invoice.is_draft or self._invoice.is_void or self._invoice.is_cancelled:
+            QMessageBox.information(self, "Cannot void", "This invoice cannot be voided.")
+            return
+        reason, ok = QInputDialog.getText(self, "Void invoice", "Reason for voiding:")
+        if not ok or not reason.strip():
+            return
+        try:
+            self._context.invoice_service.void(self._invoice, reason.strip())
+            self._context.session.commit()
+            self.accept()
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Void failed", str(exc))

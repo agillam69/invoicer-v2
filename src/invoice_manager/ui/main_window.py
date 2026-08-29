@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -277,6 +278,7 @@ class MainWindow(QMainWindow):
                 ]
             }
             generate_accountant_pack_pdf(Path(path), fy.strip(), self._context, settings)
+            os.startfile(str(path))
             QMessageBox.information(self, "Accountant pack", f"Saved: {path}")
         except Exception as exc:  # noqa: BLE001
             _log.exception("Accountant pack failed: %s", exc)

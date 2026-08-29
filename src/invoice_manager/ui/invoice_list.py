@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import date
 from pathlib import Path
 from typing import Any, cast
@@ -284,6 +285,7 @@ class InvoiceListPage(QWidget):
                 / f"{inv.number}.xlsx"
             )
             generate_invoice_xlsx(inv, settings, xlsx_path)
+            os.startfile(str(xlsx_path))
             QMessageBox.information(self, "Excel saved", f"Saved {xlsx_path}")
         except Exception as exc:  # noqa: BLE001
             QMessageBox.warning(self, "Excel failed", str(exc))
@@ -306,6 +308,7 @@ class InvoiceListPage(QWidget):
                 / f"{inv.number}.docx"
             )
             generate_invoice_docx(inv, settings, docx_path)
+            os.startfile(str(docx_path))
             QMessageBox.information(self, "Word saved", f"Saved {docx_path}")
         except Exception as exc:  # noqa: BLE001
             QMessageBox.warning(self, "Word failed", str(exc))
@@ -366,6 +369,7 @@ class InvoiceListPage(QWidget):
             generate_invoice_pdf(inv, settings, pdf_path)
             inv.pdf_path = str(pdf_path)
             self._context.session.commit()
+            os.startfile(str(pdf_path))
             QMessageBox.information(self, "PDF regenerated", f"Saved {pdf_path}")
             self.refresh()
         except Exception as exc:  # noqa: BLE001
@@ -425,6 +429,7 @@ class InvoiceListPage(QWidget):
                 / f"{inv.number}_reminder.pdf"
             )
             generate_reminder_pdf(inv, settings, reminder_path)
+            os.startfile(str(reminder_path))
             QMessageBox.information(self, "Reminder saved", f"Saved {reminder_path}")
         except Exception as exc:  # noqa: BLE001
             QMessageBox.warning(self, "Reminder failed", str(exc))

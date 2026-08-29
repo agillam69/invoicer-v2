@@ -95,6 +95,26 @@ class SettingsDialog(QDialog):
         "invoice_thank_you": "Thank you for your business!",
     }
 
+    _RECEIPT_WORDING = [
+        "receipt_title",
+        "receipt_invoice_label",
+        "receipt_date_label",
+        "receipt_amount_label",
+        "receipt_method_label",
+        "receipt_reference_label",
+        "receipt_thank_you",
+    ]
+
+    _RECEIPT_DEFAULTS = {
+        "receipt_title": "RECEIPT",
+        "receipt_invoice_label": "Invoice:",
+        "receipt_date_label": "Date:",
+        "receipt_amount_label": "Amount:",
+        "receipt_method_label": "Method:",
+        "receipt_reference_label": "Reference:",
+        "receipt_thank_you": "Thank you for your payment.",
+    }
+
     def __init__(self, context: AppContext, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._context = context
@@ -223,6 +243,16 @@ class SettingsDialog(QDialog):
         invoice_group.setLayout(invoice_form)
         tabs.addTab(invoice_group, "Invoice")
 
+        # Receipt wording tab
+        receipt_group = QGroupBox("Receipt PDF wording")
+        receipt_form = QFormLayout()
+        for key in self._RECEIPT_WORDING:
+            edit = QLineEdit()
+            receipt_form.addRow(self._label(key), edit)
+            self._fields[key] = edit
+        receipt_group.setLayout(receipt_form)
+        tabs.addTab(receipt_group, "Receipt")
+
         layout.addWidget(tabs)
 
         bbox = QDialogButtonBox(
@@ -238,7 +268,10 @@ class SettingsDialog(QDialog):
     def _load(self) -> None:
         settings = self._context.setting_repo
         for key, edit in self._fields.items():
-            edit.setText(settings.get(key) or "")
+            value = settings.get(key)
+            if not value:
+                value = self._INVOICE_DEFAULTS.get(key) or self._RECEIPT_DEFAULTS.get(key)
+            edit.setText(value or "")
         self._gst_rate.setText(settings.get("gst_rate") or "0.0")
         self._payment_terms.setValue(settings.get_int("payment_terms_days", 7))
         self._fy_start.setValue(settings.get_int("financial_year_start_month", 7))

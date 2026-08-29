@@ -46,20 +46,19 @@ class ReceiptPDFBuilder:
         story.append(Paragraph(self._get("business_address"), styles["Normal"]))
         story.append(Spacer(1, 6 * mm))
 
-        story.append(
-            Paragraph(f"<b>RECEIPT</b> — {self.payment.receipt_number}", styles["Heading2"])
-        )
+        title = self._get("receipt_title", "RECEIPT")
+        story.append(Paragraph(f"<b>{title}</b> — {self.payment.receipt_number}", styles["Heading2"]))
         data = [
-            ["Invoice:", self.invoice.number],
-            ["Date:", str(self.payment.date)],
-            ["Amount:", str(Money(cents=self.payment.amount_cents))],
-            ["Method:", self.payment.method or ""],
-            ["Reference:", self.payment.reference or ""],
+            [self._get("receipt_invoice_label", "Invoice:"), self.invoice.number],
+            [self._get("receipt_date_label", "Date:"), str(self.payment.date)],
+            [self._get("receipt_amount_label", "Amount:"), str(Money(cents=self.payment.amount_cents))],
+            [self._get("receipt_method_label", "Method:"), self.payment.method or ""],
+            [self._get("receipt_reference_label", "Reference:"), self.payment.reference or ""],
         ]
         story.append(Table(data, colWidths=[35 * mm, 120 * mm]))
         story.append(Spacer(1, 8 * mm))
 
-        thank_you = self._get("thank_you_note", "Thank you for your payment.")
+        thank_you = self._get("receipt_thank_you", "Thank you for your payment.")
         if thank_you:
             story.append(Paragraph(thank_you, styles["Normal"]))
 
