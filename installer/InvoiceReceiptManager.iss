@@ -2,7 +2,7 @@
 #define MyAppName "Invoice & Receipt Manager"
 #define MyAppVersion "2.0.6"
 #define MyAppPublisher "Gillams Software"
-#define MyAppExeName "InvoiceReceiptManager.exe"
+#define MyAppExeName "InvoiceReceiptManager-2.0.6.exe"
 
 [Setup]
 AppId={{8A2B9C4D-5E6F-7A8B-9C0D-1E2F3A4B5C6D}
@@ -12,7 +12,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
 DisableProgramGroupPage=no
 OutputDir=..\dist
-OutputBaseFilename=InvoiceReceiptManager_Setup
+OutputBaseFilename=InvoiceReceiptManager_{#MyAppVersion}_Setup
 SetupLogging=yes
 Compression=lzma
 SolidCompression=yes

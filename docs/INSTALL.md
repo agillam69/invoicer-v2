@@ -8,7 +8,7 @@
 
 ## Install with the setup wizard
 
-1. Download `InvoiceReceiptManager_Setup.exe` from the `dist` folder or the latest release.
+1. Download `InvoiceReceiptManager_{version}_Setup.exe` from the `dist` folder or the latest release.
 2. Double-click the installer.
 3. Follow the prompts. The default install location is:
 
@@ -26,7 +26,7 @@
 If you prefer not to install, use the standalone executable:
 
 ```
-dist\2.0.6\InvoiceReceiptManager.exe
+dist\2.0.6\InvoiceReceiptManager-2.0.6.exe
 ```
 
 This is a self-contained PyInstaller build. It writes its data, documents, and logs to your user data directory rather than the install folder.
@@ -51,7 +51,7 @@ Use **Tools > Backup now** to create a timestamped ZIP of this data. Store backu
 ## Upgrading
 
 1. Create a backup via **Tools > Backup now**.
-2. Run the new `InvoiceReceiptManager_Setup.exe`. The installer will overwrite the program files but will not touch your data directory.
+2. Run the new `InvoiceReceiptManager_{version}_Setup.exe`. The installer will overwrite the program files but will not touch your data directory.
 3. Launch the application and verify your data is present.
 
 ## Uninstalling
@@ -60,6 +60,6 @@ Use **Windows Settings > Apps > Invoice & Receipt Manager > Uninstall**. This re
 
 ## Troubleshooting
 
-- **Only one instance can run at a time.** If the app does not open, check the Task Manager for a lingering `InvoiceReceiptManager.exe` process.
+- **Only one instance can run at a time.** If the app does not open, check the Task Manager for a lingering `InvoiceReceiptManager-2.0.6.exe` process.
 - **Missing PDFs:** ensure `reportlab` and the application data directory are accessible. PDFs are written to `%LOCALAPPDATA%\InvoiceReceiptManager\documents`.
 - **Install error:** run the installer as Administrator if you chose a protected folder such as `C:\Program Files`.
