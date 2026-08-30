@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +39,13 @@ class AppConfig:
 
     @classmethod
     def _default_base_dir(cls) -> Path:
+        if getattr(sys, "frozen", False):
+            # For PyInstaller one-file builds, sys.argv[0] is the outer
+            # executable. Use the folder containing the exe if a local data
+            # tree has been placed there (portable mode).
+            exe_dir = Path(sys.argv[0]).resolve().parent
+            if (exe_dir / "data").is_dir():
+                return exe_dir
         local_app_data = os.environ.get("LOCALAPPDATA")
         if local_app_data:
             return Path(local_app_data) / cls.APP_DIR_NAME

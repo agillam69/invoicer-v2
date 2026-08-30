@@ -29,7 +29,22 @@ If you prefer not to install, use the standalone executable:
 dist\2.0.7\InvoiceReceiptManager-2.0.7.exe
 ```
 
-This is a self-contained PyInstaller build. It writes its data, documents, and logs to your user data directory rather than the install folder.
+By default the executable stores data, documents, and logs in `%LOCALAPPDATA%\InvoiceReceiptManager`. To make it store data next to the executable, create or place a `data` folder in the same directory as the `.exe` before running it. The application will then use that folder instead of `%LOCALAPPDATA%`.
+
+## Use the portable zip
+
+A ready-to-go portable archive is also available:
+
+```
+dist\InvoiceReceiptManager_2.0.7_Portable.zip
+```
+
+To move the whole program and all your data to another location:
+
+1. Close the application.
+2. Extract `InvoiceReceiptManager_2.0.7_Portable.zip` to the desired folder (for example, a OneDrive or USB folder).
+3. The archive contains the `.exe` plus the full data tree (`data/`, `documents/`, `exports/`, `backups/`, `logs/`, and `config.json`).
+4. Run `InvoiceReceiptManager-2.0.7.exe` from that folder. It will use the local data automatically.
 
 ## First run
 
@@ -41,10 +56,10 @@ On the first run the application will:
 
 ## Data and backups
 
-- **Database:** `%LOCALAPPDATA%\InvoiceReceiptManager\data\business.sqlite3`
-- **Documents:** `%LOCALAPPDATA%\InvoiceReceiptManager\documents\invoices`, `receipts`, `statements`
-- **Logs:** `%LOCALAPPDATA%\InvoiceReceiptManager\logs`
-- **Settings:** `%LOCALAPPDATA%\InvoiceReceiptManager\config.json`
+- **Database:** `%LOCALAPPDATA%\InvoiceReceiptManager\data\business.sqlite3` (or `data\business.sqlite3` next to the `.exe` in portable mode)
+- **Documents:** `%LOCALAPPDATA%\InvoiceReceiptManager\documents\invoices`, `receipts`, `statements` (or `documents\...` next to the `.exe` in portable mode)
+- **Logs:** `%LOCALAPPDATA%\InvoiceReceiptManager\logs` (or `logs\` next to the `.exe` in portable mode)
+- **Settings:** `%LOCALAPPDATA%\InvoiceReceiptManager\config.json` (or `config.json` next to the `.exe` in portable mode)
 
 Use **Tools > Backup now** to create a timestamped ZIP of this data. Store backups somewhere other than the install location, preferably in OneDrive or another safe location.
 
