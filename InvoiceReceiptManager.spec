@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='InvoiceReceiptManager-2.0.6',
+    name='InvoiceReceiptManager-2.0.7',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

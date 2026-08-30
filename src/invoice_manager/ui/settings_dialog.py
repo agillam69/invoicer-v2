@@ -255,6 +255,18 @@ class SettingsDialog(QDialog):
         data_row.addWidget(onedrive_btn)
         data_form.addRow("Data folder:", data_row)
 
+        self._documents_dir = QLineEdit()
+        self._documents_dir.setReadOnly(True)
+        docs_browse_btn = QPushButton("Browse...")
+        docs_browse_btn.clicked.connect(self._browse_documents_dir)
+        docs_reset_btn = QPushButton("Use default")
+        docs_reset_btn.clicked.connect(self._reset_documents_dir)
+        documents_row = QHBoxLayout()
+        documents_row.addWidget(self._documents_dir)
+        documents_row.addWidget(docs_browse_btn)
+        documents_row.addWidget(docs_reset_btn)
+        data_form.addRow("Documents (PDF) folder:", documents_row)
+
         self._database_path = QLineEdit()
         self._database_path.setReadOnly(True)
         open_db_btn = QPushButton("Open database location")
@@ -391,6 +403,7 @@ class SettingsDialog(QDialog):
         self._backup_folder.setText(settings.get("backup_folder") or self._default_for("backup_folder"))
 
         self._data_dir.setText(str(self._context.config.get_data_directory()))
+        self._documents_dir.setText(str(self._context.config.get_documents_directory()))
         self._database_path.setText(str(self._context.config.db_path()))
         database_cfg = self._context.config.load()
         mode_index = self._database_mode.findData(self._context.config.database_mode())
@@ -443,6 +456,10 @@ class SettingsDialog(QDialog):
         new_data_dir = Path(self._data_dir.text())
         if new_data_dir != self._context.config.get_data_directory():
             self._context.config.set_data_directory(new_data_dir)
+
+        new_documents_dir = Path(self._documents_dir.text())
+        if new_documents_dir != self._context.config.get_documents_directory():
+            self._context.config.set_documents_directory(new_documents_dir)
         self._context.config.configure_database(
             {
                 "database_mode": self._database_mode.currentData(),
@@ -504,6 +521,16 @@ class SettingsDialog(QDialog):
         )
         if path:
             self._data_dir.setText(path)
+
+    def _browse_documents_dir(self) -> None:
+        path = QFileDialog.getExistingDirectory(
+            self, "Select documents output directory", self._documents_dir.text()
+        )
+        if path:
+            self._documents_dir.setText(path)
+
+    def _reset_documents_dir(self) -> None:
+        self._documents_dir.setText(str(self._context.config.base_dir / "documents"))
 
     def _use_onedrive(self) -> None:
         onedrive = os.environ.get("ONEDRIVE") or str(Path.home() / "OneDrive")

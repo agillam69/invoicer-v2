@@ -273,8 +273,7 @@ class ManualInvoiceDialog(QDialog):
 
     def _generate_invoice_pdf(self, invoice: Invoice) -> None:
         path = (
-            self._context.config.get_data_directory()
-            / "documents"
+            self._context.config.get_documents_directory()
             / "invoices"
             / str(cast(date, invoice.issue_date).year)
             / f"{invoice.number}.pdf"

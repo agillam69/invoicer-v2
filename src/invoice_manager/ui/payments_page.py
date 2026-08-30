@@ -125,8 +125,7 @@ class ManualReceiptDialog(QDialog):
             self._context.session.commit()
             receipt_date = cast(date, receipt.date)
             folder = (
-                self._context.config.get_data_directory()
-                / "documents"
+                self._context.config.get_documents_directory()
                 / "receipts"
                 / str(receipt_date.year)
             )
@@ -268,8 +267,7 @@ class RecordPaymentDialog(QDialog):
             ]
         }
         receipt_path = (
-            self._context.config.get_data_directory()
-            / "documents"
+            self._context.config.get_documents_directory()
             / "receipts"
             / str(cast(date, payment.date).year)
             / f"{payment.receipt_number}.pdf"
@@ -345,8 +343,7 @@ class IssueReceiptDialog(QDialog):
             self._context.payment_service._persist_numbering()
             settings = _receipt_settings(self._context)
             receipt_path = (
-                self._context.config.get_data_directory()
-                / "documents"
+                self._context.config.get_documents_directory()
                 / "receipts"
                 / str(cast(date, payment.date).year)
                 / f"{payment.receipt_number}.{extension}"
@@ -510,8 +507,7 @@ class PaymentsPage(QWidget):
             else:
                 number = record.number
             path = (
-                self._context.config.get_data_directory()
-                / "documents"
+                self._context.config.get_documents_directory()
                 / "receipts"
                 / str(cast(date, record.date).year)
                 / f"{number}.{extension}"

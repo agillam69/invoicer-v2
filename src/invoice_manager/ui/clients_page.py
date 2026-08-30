@@ -235,8 +235,7 @@ class ClientsPage(QWidget):
             ]
         }
         output = (
-            self._context.config.get_data_directory()
-            / "documents"
+            self._context.config.get_documents_directory()
             / "statements"
             / f"client_{client.id}"
             / f"statement_{date.today().isoformat()}.pdf"

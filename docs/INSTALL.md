@@ -26,7 +26,7 @@
 If you prefer not to install, use the standalone executable:
 
 ```
-dist\2.0.6\InvoiceReceiptManager-2.0.6.exe
+dist\2.0.7\InvoiceReceiptManager-2.0.7.exe
 ```
 
 This is a self-contained PyInstaller build. It writes its data, documents, and logs to your user data directory rather than the install folder.
@@ -60,6 +60,6 @@ Use **Windows Settings > Apps > Invoice & Receipt Manager > Uninstall**. This re
 
 ## Troubleshooting
 
-- **Only one instance can run at a time.** If the app does not open, check the Task Manager for a lingering `InvoiceReceiptManager-2.0.6.exe` process.
+- **Only one instance can run at a time.** If the app does not open, check the Task Manager for a lingering `InvoiceReceiptManager-2.0.7.exe` process.
 - **Missing PDFs:** ensure `reportlab` and the application data directory are accessible. PDFs are written to `%LOCALAPPDATA%\InvoiceReceiptManager\documents`.
 - **Install error:** run the installer as Administrator if you chose a protected folder such as `C:\Program Files`.

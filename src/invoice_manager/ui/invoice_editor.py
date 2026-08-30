@@ -530,8 +530,7 @@ class InvoiceEditorDialog(QDialog):
                 ]
             }
             pdf_path = (
-                self._context.config.get_data_directory()
-                / "documents"
+                self._context.config.get_documents_directory()
                 / "invoices"
                 / str(cast(date, invoice.issue_date).year)
                 / f"{invoice.number}.pdf"
@@ -610,8 +609,7 @@ class InvoiceEditorDialog(QDialog):
     def _document_path(self, folder: str, ext: str) -> Path:
         assert self._invoice is not None
         return (
-            self._context.config.get_data_directory()
-            / "documents"
+            self._context.config.get_documents_directory()
             / folder
             / str(cast(date, self._invoice.issue_date).year)
             / f"{self._invoice.number}.{ext}"

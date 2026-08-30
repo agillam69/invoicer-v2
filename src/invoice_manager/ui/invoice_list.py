@@ -340,8 +340,7 @@ class InvoiceListPage(QWidget):
         try:
             settings = self._invoice_settings()
             xlsx_path = (
-                self._context.config.get_data_directory()
-                / "documents"
+                self._context.config.get_documents_directory()
                 / "invoices"
                 / str(cast(date, inv.issue_date).year)
                 / f"{inv.number}.xlsx"
@@ -363,8 +362,7 @@ class InvoiceListPage(QWidget):
         try:
             settings = self._invoice_settings()
             docx_path = (
-                self._context.config.get_data_directory()
-                / "documents"
+                self._context.config.get_documents_directory()
                 / "invoices"
                 / str(cast(date, inv.issue_date).year)
                 / f"{inv.number}.docx"
@@ -422,8 +420,7 @@ class InvoiceListPage(QWidget):
         try:
             settings = self._invoice_settings()
             pdf_path = (
-                self._context.config.get_data_directory()
-                / "documents"
+                self._context.config.get_documents_directory()
                 / "invoices"
                 / str(cast(date, inv.issue_date).year)
                 / f"{inv.number}.pdf"
@@ -484,8 +481,7 @@ class InvoiceListPage(QWidget):
                 ]
             }
             reminder_path = (
-                self._context.config.get_data_directory()
-                / "documents"
+                self._context.config.get_documents_directory()
                 / "reminders"
                 / str(cast(date, inv.issue_date).year)
                 / f"{inv.number}_reminder.pdf"
