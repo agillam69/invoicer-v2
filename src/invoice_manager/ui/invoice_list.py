@@ -27,6 +27,7 @@ from invoice_manager.application.invoice_service import InvoiceService
 from invoice_manager.config import AppPaths
 from invoice_manager.domain.money import format_aud
 from invoice_manager.infrastructure.file_store import FileStore
+from invoice_manager.infrastructure.logging_setup import log_user_error
 from invoice_manager.persistence.models import Document, Invoice
 
 
@@ -171,7 +172,8 @@ class InvoiceListView(QWidget):
         elif document.managed_relative_path:
             try:
                 path = self.files.managed_path(document.managed_relative_path)
-            except ValueError:
+            except ValueError as exc:
+                log_user_error("Resolving managed document path failed", exc)
                 path = Path()
         else:
             path = Path()
@@ -212,7 +214,8 @@ class InvoiceListView(QWidget):
         elif document.managed_relative_path:
             try:
                 path = self.files.managed_path(document.managed_relative_path)
-            except ValueError:
+            except ValueError as exc:
+                log_user_error("Resolving managed document path failed", exc)
                 return None
         else:
             return None

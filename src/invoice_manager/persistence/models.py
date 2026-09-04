@@ -150,6 +150,10 @@ class Invoice(Base):
         CheckConstraint(
             "subtotal_cents >= 0 AND gst_cents >= 0 AND total_cents >= 0", name="ck_invoice_money"
         ),
+        CheckConstraint(
+            "issued_at IS NULL OR canonical_number IS NOT NULL",
+            name="ck_invoice_issued_number",
+        ),
         {"sqlite_autoincrement": True},
     )
 
@@ -207,13 +211,23 @@ class Payment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     __table_args__ = (
         CheckConstraint("amount_cents > 0", name="ck_payment_positive"),
+        CheckConstraint(
+            "reversed_at IS NULL OR reversal_reason IS NOT NULL",
+            name="ck_payment_reversal_reason",
+        ),
         {"sqlite_autoincrement": True},
     )
 
 
 class Document(Base):
     __tablename__ = "documents"
-    __table_args__ = {"sqlite_autoincrement": True}
+    __table_args__ = (
+        CheckConstraint(
+            "managed_relative_path IS NOT NULL OR external_path IS NOT NULL",
+            name="ck_document_location",
+        ),
+        {"sqlite_autoincrement": True},
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     entity_type: Mapped[str] = mapped_column(String(40), index=True)
     entity_id: Mapped[int] = mapped_column(Integer, index=True)

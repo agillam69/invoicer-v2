@@ -21,4 +21,12 @@ def test_head_matches_models_metadata(tmp_path: Path) -> None:
         command.upgrade(config, "head")
         migration_context = MigrationContext.configure(connection)
         assert compare_metadata(migration_context, Base.metadata) == []
+        statements = connection.exec_driver_sql("select sql from sqlite_master").scalars().all()
+        sql = "\n".join(statement for statement in statements if statement)
+        for constraint in (
+            "ck_invoice_issued_number",
+            "ck_payment_reversal_reason",
+            "ck_document_location",
+        ):
+            assert constraint in sql
     engine.dispose()

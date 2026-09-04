@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from invoice_manager.application.client_service import ClientService
 from invoice_manager.config import AppPaths
 from invoice_manager.domain.money import format_aud
+from invoice_manager.infrastructure.logging_setup import log_user_error
 from invoice_manager.persistence.models import Client
 
 
@@ -145,6 +146,7 @@ class ClientsView(QWidget):
             self._clear_form()
             self.refresh()
         except ValueError as exc:
+            log_user_error("Creating client failed", exc)
             QMessageBox.warning(self, "Client", str(exc))
 
     def _update(self) -> None:
@@ -162,6 +164,7 @@ class ClientsView(QWidget):
             self.session.commit()
             self.refresh()
         except ValueError as exc:
+            log_user_error("Updating client failed", exc)
             QMessageBox.warning(self, "Client", str(exc))
 
     def _deactivate(self) -> None:
@@ -187,6 +190,7 @@ class ClientsView(QWidget):
             self._clear_form()
             self.refresh()
         except ValueError as exc:
+            log_user_error("Deleting client failed", exc)
             QMessageBox.warning(self, "Client", str(exc))
 
     def _export(self) -> None:

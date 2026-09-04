@@ -36,8 +36,14 @@ InvoiceReceiptManager/
   documents/attachments/
   exports/
   backups/
-  logs/
+  logs/app.log
+  logs/error.log
 ```
+
+`logs/app.log` records normal activity. `logs/error.log` records only errors and
+above with module, function, line, process, thread, and full traceback, so a
+failure can be diagnosed from the file alone. Both files rotate at 1 MB with
+five backups, redact credentials, and are readable in the app under Logs.
 
 ## Setup
 

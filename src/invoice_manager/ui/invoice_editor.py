@@ -26,6 +26,7 @@ from invoice_manager.application.invoice_service import InvoiceItemData, Invoice
 from invoice_manager.application.service_item_service import ServiceItemService
 from invoice_manager.config import AppPaths
 from invoice_manager.domain.money import format_aud
+from invoice_manager.infrastructure.logging_setup import log_user_error
 from invoice_manager.persistence.models import BusinessProfile, Client, Invoice, ServiceItem
 
 
@@ -229,6 +230,7 @@ class InvoiceEditorView(QWidget):
             invoice_date = self._parse_date(self.invoice_date_input.text())
             due_date = self._parse_date(self.due_date_input.text())
         except ValueError as exc:
+            log_user_error("Invalid invoice dates", exc)
             if show_error:
                 self._show_error(str(exc))
             return None
@@ -313,6 +315,7 @@ class InvoiceEditorView(QWidget):
                 self.session.commit()
                 self._new_invoice()
             except ValueError as exc:
+                log_user_error("Deleting invoice draft failed", exc)
                 QMessageBox.warning(self, "Invoice", str(exc))
 
     def _preview(self) -> None:
@@ -338,6 +341,7 @@ class InvoiceEditorView(QWidget):
                 self.session.commit()
                 self._new_invoice()
             except ValueError as exc:
+                log_user_error("Issuing invoice failed", exc)
                 self._show_error(str(exc))
 
     def load_invoice(self, invoice: Invoice) -> None:

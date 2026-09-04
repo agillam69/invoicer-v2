@@ -132,6 +132,7 @@ def test_client_duplicate_merge_delete_and_rollup(session) -> None:
         total_cents=100,
         subtotal_cents=100,
         client_name_snapshot=first.display_name,
+        canonical_number="INV-0001",
         issued_at=utc_now(),
     )
     session.add(invoice)
@@ -368,6 +369,7 @@ def test_rollup_tracks_paid_balance_and_overdue(session) -> None:
         client_name_snapshot=client.display_name,
         subtotal_cents=1000,
         total_cents=1000,
+        canonical_number="INV-0001",
         issued_at=utc_now(),
     )
     session.add(invoice)
@@ -393,6 +395,7 @@ def test_rollup_excludes_drafts_and_cancelled_or_voided_invoices(session) -> Non
         client_name_snapshot=client.display_name,
         subtotal_cents=1000,
         total_cents=1000,
+        canonical_number="INV-0001",
         issued_at=utc_now(),
     )
     draft = Invoice(
@@ -410,6 +413,7 @@ def test_rollup_excludes_drafts_and_cancelled_or_voided_invoices(session) -> Non
         client_name_snapshot=client.display_name,
         subtotal_cents=3000,
         total_cents=3000,
+        canonical_number="INV-0002",
         issued_at=utc_now(),
     )
     session.add_all([issued, draft, voided])
